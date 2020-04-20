@@ -1,0 +1,7 @@
+# Env
+.vscode
+*.code-workspace
+
+# Data
+*.json
+testdata/
