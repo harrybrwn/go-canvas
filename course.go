@@ -95,17 +95,14 @@ type Course struct {
 // Files returns a channel of all the course's files
 func (c *Course) Files() <-chan *File {
 	files := make(chan *File)
-	quit := make(chan int)
-	pages := newPaginatedList(
-		c.client,
-		fmt.Sprintf("courses/%d/files", c.ID),
-		filesInit,
-	)
+	quit := make(chan int, 1)
+	pages := pagedFiles(c.client, c.filespath())
 	ch := pages.channel()
 	go func() {
-		for {
+		for i := 0; ; i++ {
 			select {
 			case <-quit:
+				close(files)
 				return
 			case err := <-pages.errs:
 				if err != nil {
@@ -117,11 +114,23 @@ func (c *Course) Files() <-chan *File {
 					return
 				}
 				files <- f.(*File)
-			default:
 			}
 		}
 	}()
 	return files
+}
+
+// FilesChan will return a channel that sends File structs
+// and a channel that sends errors.
+func (c *Course) FilesChan() (<-chan *File, chan error) {
+	files := make(chan *File)
+	pages := pagedFiles(c.client, c.filespath())
+	go func() {
+		for f := range pages.channel() {
+			files <- f.(*File)
+		}
+	}()
+	return files, pages.errs
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -129,6 +138,8 @@ func (c *Course) Files() <-chan *File {
 // will simply panic.
 //
 // The callback should accept an error and a quit channel.
+// If a value is sent on the quit channel, whatever secsion of
+// code is receiving the channel will end gracefully.
 func (c *Course) SetErrorHandler(f func(error, chan int)) {
 	c.errorHandler = f
 }
@@ -260,6 +271,10 @@ func (c *Course) path(p ...string) string {
 	return path.Join(p...)
 }
 
+func (c *Course) filespath() string {
+	return fmt.Sprintf("courses/%d/files", c.ID)
+}
+
 func (c *Course) setClient(cl *client) {
 	c.client = cl
 }
@@ -324,6 +339,24 @@ func newlink(urlstr string) (*link, error) {
 	}, nil
 }
 
+func pagedFiles(d doer, path string) *paginated {
+	return newPaginatedList(d, path, filesInit)
+}
+
+func filesInit(r io.Reader) ([]interface{}, error) {
+	files := make([]*File, 0)
+	if err := json.NewDecoder(r).Decode(&files); err != nil {
+		return nil, err
+	}
+	objects := make([]interface{}, len(files))
+	for i, f := range files {
+		objects[i] = f
+	}
+	return objects, nil
+}
+
 func defaultErrorHandler(err error, quit chan int) {
+	quit <- 1
+	close(quit)
 	panic(err)
 }

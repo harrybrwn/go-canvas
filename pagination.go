@@ -1,7 +1,6 @@
 package canvas
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/url"
@@ -89,16 +88,4 @@ func (p *paginated) channel() <-chan interface{} {
 		close(p.errs)
 	}()
 	return objects
-}
-
-func filesInit(r io.Reader) ([]interface{}, error) {
-	files := make([]*File, 0)
-	if err := json.NewDecoder(r).Decode(&files); err != nil {
-		return nil, err
-	}
-	objects := make([]interface{}, len(files))
-	for i, f := range files {
-		objects[i] = f
-	}
-	return objects, nil
 }
