@@ -117,12 +117,39 @@ func (c *Course) Files() ([]*File, error) {
 	return files, nil
 }
 
-func (c *Course) FilesChan() (<-chan *File, chan error) {
-	path := fmt.Sprintf("courses/%d/files", c.ID)
+// FilesChan returns a channel the streams course files.
+func (c *Course) FilesChan() <-chan *File {
+	files := make(chan *File)
+	filesCh, errs := c.files()
+
+	go func() {
+		for {
+			select {
+			case err := <-errs:
+				if err != nil {
+					panic(err)
+				}
+			case f := <-filesCh:
+				if f == nil {
+					close(files)
+					return
+				}
+				files <- f
+			default:
+			}
+		}
+	}()
+	return files
+}
+
+func (c *Course) files() (<-chan *File, <-chan error) {
 	var (
+		path  = fmt.Sprintf("courses/%d/files", c.ID)
 		files = make(chan *File)
 		errs  = make(chan error)
+		wg    sync.WaitGroup
 	)
+
 	// First we get page 1 and store the "Link" header value
 	// so that we know how many pages there are (see newLinkedResource).
 	resp, err := c.client.get(path, url.Values{
@@ -132,23 +159,6 @@ func (c *Course) FilesChan() (<-chan *File, chan error) {
 		errs <- err
 		return nil, errs
 	}
-	// Also, since we have already made the request for the first page,
-	// we may as well decode the files and send them in the channel.
-
-	fileArr, err := decodeAndCloseFiles(resp.Body)
-	if err != nil {
-		errs <- err
-		return nil, errs
-	}
-	go func() {
-
-		for _, f := range fileArr {
-			files <- f
-		}
-		// We will know when this goroutine has finished
-		// because fileArr will be nil.
-		fileArr = nil
-	}()
 
 	// The is where we store the links. We do this so that
 	// we know how many pages there are.
@@ -162,67 +172,92 @@ func (c *Course) FilesChan() (<-chan *File, chan error) {
 		errs <- errors.New("could not find last page")
 		return nil, errs
 	}
-	last := lastpage.page // we still get the last page, just not the next one
+	n := lastpage.page // number of pages
+	wg.Add(n)
+	// send files from first page
 	go func() {
-		var wg sync.WaitGroup
-		wg.Add(last)
-		for page := 2; page <= last; page++ {
-			fmt.Println("getting page no.", page)
-			go c.asyncGetFiles(path, page, files, errs, &wg)
+		// Also, since we have already made the request for the first page,
+		// we may as well decode the files and send them in the channel.
+		pageOneFiles, err := decodeAndCloseFiles(resp.Body)
+		if err != nil {
+			errs <- err
 		}
-		println("waiting to close channels")
+		for _, f := range pageOneFiles {
+			files <- f
+		}
+		wg.Done()
+	}()
+	// get the rest of the pages and send
+	for page := 2; page <= n; page++ {
+		go c.asyncGetFiles(path, page, files, errs, &wg)
+	}
+	go func() {
 		wg.Wait()
-		println("closing channels")
 		close(files)
 		close(errs)
 	}()
-
 	return files, errs
 }
 
-func (c Course) asyncGetFiles(path string, page int, files chan<- *File, errs chan<- error, wg *sync.WaitGroup) {
+func (c Course) asyncGetFiles(path string, page int, files chan<- *File, errs chan<- error, wg *sync.WaitGroup) error {
 	defer wg.Done()
 	resp, err := c.client.get(path, url.Values{
 		"page": {strconv.FormatInt(int64(page), 10)},
 	})
 	if err != nil {
-		panic(err)
 		errs <- err
-		return
+		return err
 	}
 	defer resp.Body.Close()
 	arr := make([]*File, 0, 10)
 	if err = json.NewDecoder(resp.Body).Decode(&arr); err != nil {
-		panic(err)
 		errs <- err
-		return
+		return err
 	}
 	for _, f := range arr {
 		files <- f
 	}
+	return nil
 }
 
 // CourseOption is a string type that defines the available course options.
 type CourseOption string
 
 const (
-	NeedsGradingCountOpt          CourseOption = "needs_grading_count"
-	SyllabusBodyOpt               CourseOption = "syllabus_body"
-	PublicDescriptionOpt          CourseOption = "public_description"
-	TotalScoresOpt                CourseOption = "total_scores"
+	// NeedsGradingCountOpt is a course option
+	NeedsGradingCountOpt CourseOption = "needs_grading_count"
+	// SyllabusBodyOpt is a course option
+	SyllabusBodyOpt CourseOption = "syllabus_body"
+	// PublicDescriptionOpt is a course option
+	PublicDescriptionOpt CourseOption = "public_description"
+	// TotalScoresOpt is a course option
+	TotalScoresOpt CourseOption = "total_scores"
+	// CurrentGradingPeriodScoresOpt is a course option
 	CurrentGradingPeriodScoresOpt CourseOption = "current_grading_period_scores"
-	TermOpt                       CourseOption = "term"
-	AccountOpt                    CourseOption = "account"
-	CourseProgressOpt             CourseOption = "course_progress"
-	SectionsOpt                   CourseOption = "sections"
-	StorageQuotaUsedMBOpt         CourseOption = "storage_quota_used_mb"
-	TotalStudentsOpt              CourseOption = "total_students"
-	PassbackStatusOpt             CourseOption = "passback_status"
-	FavoritesOpt                  CourseOption = "favorites"
-	TeachersOpt                   CourseOption = "teachers"
-	ObservedUsersOpt              CourseOption = "observed_users"
-	CourseImageOpt                CourseOption = "course_image"
-	ConcludedOpt                  CourseOption = "concluded"
+	// TermOpt is a course option
+	TermOpt CourseOption = "term"
+	// AccountOpt is a course option
+	AccountOpt CourseOption = "account"
+	// CourseProgressOpt is a course option
+	CourseProgressOpt CourseOption = "course_progress"
+	// SectionsOpt is a course option
+	SectionsOpt CourseOption = "sections"
+	// StorageQuotaUsedMBOpt is a course option
+	StorageQuotaUsedMBOpt CourseOption = "storage_quota_used_mb"
+	// TotalStudentsOpt is a course option
+	TotalStudentsOpt CourseOption = "total_students"
+	// PassbackStatusOpt is a course option
+	PassbackStatusOpt CourseOption = "passback_status"
+	// FavoritesOpt is a course option
+	FavoritesOpt CourseOption = "favorites"
+	// TeachersOpt is a course option
+	TeachersOpt CourseOption = "teachers"
+	// ObservedUsersOpt is a course option
+	ObservedUsersOpt CourseOption = "observed_users"
+	// CourseImageOpt is a course option
+	CourseImageOpt CourseOption = "course_image"
+	// ConcludedOpt is a course option
+	ConcludedOpt CourseOption = "concluded"
 )
 
 func (opt CourseOption) String() string {
@@ -319,10 +354,16 @@ func (c *Course) setClient(cl *client) {
 func decodeAndCloseFiles(rc io.ReadCloser) ([]*File, error) {
 	files := make([]*File, 0)
 	var err error
+	defer func() {
+		e := rc.Close()
+		if err == nil {
+			err = e
+		}
+	}()
 	if err = json.NewDecoder(rc).Decode(&files); err != nil {
 		return nil, err
 	}
-	return files, rc.Close()
+	return files, err
 }
 
 var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)

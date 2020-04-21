@@ -40,17 +40,6 @@ func testCourse() *Course {
 }
 
 func TestAuth(t *testing.T) {
-	c := testCourse()
-	ch, _ := c.FilesChan()
-	// if err := <-errs; err != nil {
-	// 	t.Error(err)
-	// }
-	count := 0
-	for f := range ch {
-		count++
-		fmt.Printf("%d %s\n", f.ID, f.Filename)
-	}
-	fmt.Println("found", count, "files")
 }
 
 func TestCourse(t *testing.T) {
