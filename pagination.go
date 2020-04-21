@@ -3,6 +3,7 @@ package canvas
 import (
 	"errors"
 	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
@@ -14,24 +15,29 @@ func newPaginatedList(
 	init func(io.Reader) ([]interface{}, error),
 ) *paginated {
 	return &paginated{
-		do:   d,
-		init: init,
-		path: path,
-		wg:   new(sync.WaitGroup),
-		errs: make(chan error),
+		do:      d,
+		init:    init,
+		path:    path,
+		wg:      new(sync.WaitGroup),
+		objects: make(chan interface{}),
+		errs:    make(chan error),
 	}
 }
 
 type paginated struct {
-	wg   *sync.WaitGroup
-	errs chan error
 	path string
-	init func(io.Reader) ([]interface{}, error)
 	do   doer
+
+	n       int
+	objects chan interface{}
+	errs    chan error
+
+	wg   *sync.WaitGroup
+	init func(io.Reader) ([]interface{}, error)
 }
 
-func (p *paginated) channel() <-chan interface{} {
-	var objects = make(chan interface{})
+// returns <number of pages>, <response>
+func (p *paginated) firstReq() (int, *http.Response) {
 	resp, err := get(p.do, p.path, url.Values{
 		"page": {"1"},
 	})
@@ -46,7 +52,12 @@ func (p *paginated) channel() <-chan interface{} {
 	if !ok {
 		p.errs <- errors.New("could not find last page")
 	}
-	n := lastpage.page
+	p.n = lastpage.page
+	return p.n, resp
+}
+
+func (p *paginated) channel() <-chan interface{} {
+	n, resp := p.firstReq()
 	p.wg.Add(n)
 
 	go func() {
@@ -57,7 +68,7 @@ func (p *paginated) channel() <-chan interface{} {
 			return
 		}
 		for _, o := range list {
-			objects <- o
+			p.objects <- o
 		}
 		p.wg.Done()
 	}()
@@ -77,15 +88,15 @@ func (p *paginated) channel() <-chan interface{} {
 				return
 			}
 			for _, o := range obs {
-				objects <- o
+				p.objects <- o
 			}
 			p.wg.Done()
 		}(int64(page), p.path)
 	}
 	go func() {
 		p.wg.Wait()
-		close(objects)
+		close(p.objects)
 		close(p.errs)
 	}()
-	return objects
+	return p.objects
 }

@@ -1,6 +1,11 @@
 package canvas
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"time"
+)
 
 // File is a file
 type File struct {
@@ -35,6 +40,10 @@ type File struct {
 	client *client
 }
 
+func (f *File) Folder() (*Folder, error) {
+	return nil, nil
+}
+
 // Folder is a folder
 type Folder struct {
 	ID       int    `json:"id"`
@@ -63,4 +72,39 @@ type Folder struct {
 	ForSubmissions bool        `json:"for_submissions"`
 
 	client *client
+}
+
+func (f *Folder) Files() <-chan *File {
+	pages := newPaginatedList(f.client, fmt.Sprintf("folders/%d/files", f.ID), filesInitFunc(f.client))
+	return onlyFiles(pages, defaultErrorHandler)
+}
+
+func filesInitFunc(c *client) func(io.Reader) ([]interface{}, error) {
+	return func(r io.Reader) ([]interface{}, error) {
+		files := make([]*File, 0)
+		if err := json.NewDecoder(r).Decode(&files); err != nil {
+			return nil, err
+		}
+		objects := make([]interface{}, len(files))
+		for i, f := range files {
+			f.client = c
+			objects[i] = f
+		}
+		return objects, nil
+	}
+}
+
+func foldersInitFunc(c *client) func(io.Reader) ([]interface{}, error) {
+	return func(r io.Reader) ([]interface{}, error) {
+		folders := make([]*Folder, 0)
+		if err := json.NewDecoder(r).Decode(&folders); err != nil {
+			return nil, err
+		}
+		objects := make([]interface{}, len(folders))
+		for i, f := range folders {
+			f.client = c
+			objects[i] = f
+		}
+		return objects, nil
+	}
 }

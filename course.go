@@ -94,15 +94,20 @@ type Course struct {
 
 // Files returns a channel of all the course's files
 func (c *Course) Files() <-chan *File {
-	files := make(chan *File)
+	pages := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
+	return onlyFiles(pages, c.errorHandler)
+}
+
+func (c *Course) Folders() <-chan *Folder {
+	folders := make(chan *Folder)
 	quit := make(chan int, 1)
-	pages := pagedFiles(c.client, c.filespath())
+	pages := newPaginatedList(c.client, c.folderspath(), foldersInitFunc(c.client))
 	ch := pages.channel()
 	go func() {
 		for i := 0; ; i++ {
 			select {
 			case <-quit:
-				close(files)
+				close(folders)
 				return
 			case err := <-pages.errs:
 				if err != nil {
@@ -110,27 +115,42 @@ func (c *Course) Files() <-chan *File {
 				}
 			case f := <-ch:
 				if f == nil {
-					close(files)
+					close(folders)
 					return
 				}
-				files <- f.(*File)
+				folders <- f.(*Folder)
 			}
 		}
 	}()
-	return files
+	return folders
 }
 
 // FilesChan will return a channel that sends File structs
 // and a channel that sends errors.
-func (c *Course) FilesChan() (<-chan *File, chan error) {
-	files := make(chan *File)
-	pages := pagedFiles(c.client, c.filespath())
-	go func() {
-		for f := range pages.channel() {
-			files <- f.(*File)
+func (c *Course) FilesChan() (<-chan *File, <-chan error) {
+	p := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
+	_, files, errs := files(p)
+	return files, errs
+}
+
+// ListFiles returns a slice of files for the course.
+func (c *Course) ListFiles() ([]*File, error) {
+	p := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
+	n, ch, errs := files(p)
+	files := make([]*File, 0, n*10)
+	for {
+		select {
+		case err := <-errs:
+			if err != nil {
+				return nil, err
+			}
+		case f := <-ch:
+			if f == nil {
+				return files, nil
+			}
+			files = append(files, f)
 		}
-	}()
-	return files, pages.errs
+	}
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -275,6 +295,10 @@ func (c *Course) filespath() string {
 	return fmt.Sprintf("courses/%d/files", c.ID)
 }
 
+func (c *Course) folderspath() string {
+	return fmt.Sprintf("courses/%d/folders", c.ID)
+}
+
 func (c *Course) setClient(cl *client) {
 	c.client = cl
 }
@@ -339,20 +363,54 @@ func newlink(urlstr string) (*link, error) {
 	}, nil
 }
 
-func pagedFiles(d doer, path string) *paginated {
-	return newPaginatedList(d, path, filesInit)
+func files(p *paginated) (int, <-chan *File, chan error) {
+	files := make(chan *File)
+	ch := p.channel()
+	go func() {
+		for f := range ch {
+			files <- f.(*File)
+		}
+		close(files)
+	}()
+	return p.n, files, p.errs
 }
 
-func filesInit(r io.Reader) ([]interface{}, error) {
-	files := make([]*File, 0)
-	if err := json.NewDecoder(r).Decode(&files); err != nil {
-		return nil, err
-	}
-	objects := make([]interface{}, len(files))
-	for i, f := range files {
-		objects[i] = f
-	}
-	return objects, nil
+func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File {
+	files := make(chan *File)
+	quit := make(chan int, 1)
+	ch := p.channel()
+	go func() {
+		for i := 0; ; i++ {
+			select {
+			case <-quit:
+				close(files)
+				return
+			case err := <-p.errs:
+				if err != nil {
+					handle(err, quit)
+				}
+			case f := <-ch:
+				if f == nil {
+					close(files)
+					return
+				}
+				files <- f.(*File)
+			}
+		}
+	}()
+	return files
+}
+
+func folders(p *paginated) (int, <-chan *Folder, chan error) {
+	folders := make(chan *Folder)
+	ch := p.channel()
+	go func() {
+		for f := range ch {
+			folders <- f.(*Folder)
+		}
+		close(folders)
+	}()
+	return p.n, folders, p.errs
 }
 
 func defaultErrorHandler(err error, quit chan int) {
