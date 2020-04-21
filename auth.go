@@ -27,17 +27,24 @@ type client struct {
 	http.Client
 }
 
-func (c *client) get(endopint string, vals encoder) (*http.Response, error) {
+func (c *client) get(endpoint string, vals encoder) (*http.Response, error) {
+	return get(c, endpoint, vals)
+}
+
+type doer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+func get(client doer, endpoint string, vals encoder) (*http.Response, error) {
 	var q string
 	if vals != nil {
 		q = vals.Encode()
 	}
-
-	return c.Do(&http.Request{
+	return client.Do(&http.Request{
 		Method: "GET",
 		Proto:  "HTTP/1.1",
 		URL: &url.URL{
-			Path:     path.Join("/api/v1", endopint),
+			Path:     path.Join("/api/v1", endpoint),
 			RawQuery: q,
 		},
 	})

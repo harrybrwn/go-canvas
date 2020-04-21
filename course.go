@@ -159,6 +159,7 @@ func (c *Course) files() (<-chan *File, <-chan error) {
 		errs <- err
 		return nil, errs
 	}
+	defer resp.Body.Close()
 
 	// The is where we store the links. We do this so that
 	// we know how many pages there are.
@@ -208,7 +209,6 @@ func (c Course) asyncGetFiles(path string, page int, files chan<- *File, errs ch
 		errs <- err
 		return err
 	}
-	defer resp.Body.Close()
 	arr := make([]*File, 0, 10)
 	if err = json.NewDecoder(resp.Body).Decode(&arr); err != nil {
 		errs <- err
