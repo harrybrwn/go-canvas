@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"path"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -90,51 +88,35 @@ type Course struct {
 		} `json:"wiki_page"`
 	} `json:"blueprint_restrictions_by_object_type"`
 
-	client *client
+	client       *client
+	errorHandler func(error, chan int)
 }
 
-// Files returns a list of all the courses files
-func (c *Course) Files() ([]*File, error) {
-	path := fmt.Sprintf("courses/%d/files", c.ID)
-	files := make([]*File, 0)
-
-	resp, err := c.client.get(path, url.Values{
-		"sort":     {"created_at"},
-		"per_page": {"10"},
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if err = json.NewDecoder(resp.Body).Decode(&files); err != nil {
-		return nil, err
-	}
-
-	for i := range files {
-		files[i].client = c.client
-	}
-	return files, nil
-}
-
-// FilesChan returns a channel the streams course files.
-func (c *Course) FilesChan() <-chan *File {
+// Files returns a channel of all the course's files
+func (c *Course) Files() <-chan *File {
 	files := make(chan *File)
-	filesCh, errs := c.files()
-
+	quit := make(chan int)
+	pages := newPaginatedList(
+		c.client,
+		fmt.Sprintf("courses/%d/files", c.ID),
+		filesInit,
+	)
+	ch := pages.channel()
 	go func() {
 		for {
 			select {
-			case err := <-errs:
+			case <-quit:
+				return
+			case err := <-pages.errs:
 				if err != nil {
-					panic(err)
+					c.errorHandler(err, quit)
 				}
-			case f := <-filesCh:
+			case f := <-ch:
 				if f == nil {
 					close(files)
 					return
 				}
-				files <- f
+				files <- f.(*File)
 			default:
 			}
 		}
@@ -142,82 +124,13 @@ func (c *Course) FilesChan() <-chan *File {
 	return files
 }
 
-func (c *Course) files() (<-chan *File, <-chan error) {
-	var (
-		path  = fmt.Sprintf("courses/%d/files", c.ID)
-		files = make(chan *File)
-		errs  = make(chan error)
-		wg    sync.WaitGroup
-	)
-
-	// First we get page 1 and store the "Link" header value
-	// so that we know how many pages there are (see newLinkedResource).
-	resp, err := c.client.get(path, url.Values{
-		"page": {"1"},
-	})
-	if err != nil {
-		errs <- err
-		return nil, errs
-	}
-	defer resp.Body.Close()
-
-	// The is where we store the links. We do this so that
-	// we know how many pages there are.
-	pages, err := newLinkedResource(resp)
-	if err != nil {
-		errs <- err
-		return nil, errs
-	}
-	lastpage, ok := pages.links["last"]
-	if !ok {
-		errs <- errors.New("could not find last page")
-		return nil, errs
-	}
-	n := lastpage.page // number of pages
-	wg.Add(n)
-	// send files from first page
-	go func() {
-		// Also, since we have already made the request for the first page,
-		// we may as well decode the files and send them in the channel.
-		pageOneFiles, err := decodeAndCloseFiles(resp.Body)
-		if err != nil {
-			errs <- err
-		}
-		for _, f := range pageOneFiles {
-			files <- f
-		}
-		wg.Done()
-	}()
-	// get the rest of the pages and send
-	for page := 2; page <= n; page++ {
-		go c.asyncGetFiles(path, page, files, errs, &wg)
-	}
-	go func() {
-		wg.Wait()
-		close(files)
-		close(errs)
-	}()
-	return files, errs
-}
-
-func (c Course) asyncGetFiles(path string, page int, files chan<- *File, errs chan<- error, wg *sync.WaitGroup) error {
-	defer wg.Done()
-	resp, err := c.client.get(path, url.Values{
-		"page": {strconv.FormatInt(int64(page), 10)},
-	})
-	if err != nil {
-		errs <- err
-		return err
-	}
-	arr := make([]*File, 0, 10)
-	if err = json.NewDecoder(resp.Body).Decode(&arr); err != nil {
-		errs <- err
-		return err
-	}
-	for _, f := range arr {
-		files <- f
-	}
-	return nil
+// SetErrorHandler will set a error handling callback that is
+// used to handle errors in goroutines. The default error handler
+// will simply panic.
+//
+// The callback should accept an error and a quit channel.
+func (c *Course) SetErrorHandler(f func(error, chan int)) {
+	c.errorHandler = f
 }
 
 // CourseOption is a string type that defines the available course options.
@@ -409,4 +322,8 @@ func newlink(urlstr string) (*link, error) {
 		url:  u,
 		page: int(page),
 	}, nil
+}
+
+func defaultErrorHandler(err error, quit chan int) {
+	panic(err)
 }

@@ -45,6 +45,7 @@ func (c *Canvas) getCourses(vals encoder) ([]*Course, error) {
 	}
 	for i := range crs {
 		crs[i].client = c.client
+		crs[i].errorHandler = defaultErrorHandler
 	}
 	return crs, nil
 }

@@ -41,14 +41,12 @@ func testCourse() *Course {
 
 func TestAuth(t *testing.T) {
 	c := testCourse()
-	lister := newPaginatedList(c.client, fmt.Sprintf("courses/%d/files", c.ID), filesInit)
 	i := 0
-	for f := range lister.channel() {
+	files := c.Files()
+	for f := range files {
 		i++
-		f := f.(*File)
 		fmt.Printf("%d %T %d %s\n", i, f, f.ID, f.Filename)
 	}
-	// files := c.FilesChan()
 	// var stream chan interface{} = files
 }
 
