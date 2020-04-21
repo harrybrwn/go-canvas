@@ -4,11 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"path"
-	"regexp"
-	"strconv"
 	"time"
 )
 
@@ -99,30 +95,8 @@ func (c *Course) Files() <-chan *File {
 }
 
 func (c *Course) Folders() <-chan *Folder {
-	folders := make(chan *Folder)
-	quit := make(chan int, 1)
 	pages := newPaginatedList(c.client, c.folderspath(), foldersInitFunc(c.client))
-	ch := pages.channel()
-	go func() {
-		for i := 0; ; i++ {
-			select {
-			case <-quit:
-				close(folders)
-				return
-			case err := <-pages.errs:
-				if err != nil {
-					c.errorHandler(err, quit)
-				}
-			case f := <-ch:
-				if f == nil {
-					close(folders)
-					return
-				}
-				folders <- f.(*Folder)
-			}
-		}
-	}()
-	return folders
+	return onlyFolders(pages, c.errorHandler)
 }
 
 // FilesChan will return a channel that sends File structs
@@ -136,21 +110,15 @@ func (c *Course) FilesChan() (<-chan *File, <-chan error) {
 // ListFiles returns a slice of files for the course.
 func (c *Course) ListFiles() ([]*File, error) {
 	p := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
-	n, ch, errs := files(p)
-	files := make([]*File, 0, n*10)
-	for {
-		select {
-		case err := <-errs:
-			if err != nil {
-				return nil, err
-			}
-		case f := <-ch:
-			if f == nil {
-				return files, nil
-			}
-			files = append(files, f)
-		}
+	objects, err := p.collect()
+	if err != nil {
+		return nil, err
 	}
+	files := make([]*File, len(objects))
+	for i, o := range objects {
+		files[i] = o.(*File)
+	}
+	return files, nil
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -318,51 +286,6 @@ func decodeAndCloseFiles(rc io.ReadCloser) ([]*File, error) {
 	return files, err
 }
 
-var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
-
-func newLinkedResource(rsp *http.Response) (*linkedResource, error) {
-	var err error
-	resource := &linkedResource{
-		resp:  rsp,
-		links: map[string]*link{},
-	}
-	links := rsp.Header.Get("Link")
-	parts := resourceRegex.FindAllStringSubmatch(links, -1)
-
-	for _, part := range parts {
-		resource.links[part[2]], err = newlink(part[1])
-		if err != nil {
-			return resource, err
-		}
-	}
-	return resource, nil
-}
-
-type linkedResource struct {
-	resp  *http.Response
-	links map[string]*link
-}
-
-type link struct {
-	url  *url.URL
-	page int
-}
-
-func newlink(urlstr string) (*link, error) {
-	u, err := url.Parse(urlstr)
-	if err != nil {
-		return nil, err
-	}
-	page, err := strconv.ParseInt(u.Query().Get("page"), 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse page num: %w", err)
-	}
-	return &link{
-		url:  u,
-		page: int(page),
-	}, nil
-}
-
 func files(p *paginated) (int, <-chan *File, chan error) {
 	files := make(chan *File)
 	ch := p.channel()
@@ -375,32 +298,6 @@ func files(p *paginated) (int, <-chan *File, chan error) {
 	return p.n, files, p.errs
 }
 
-func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File {
-	files := make(chan *File)
-	quit := make(chan int, 1)
-	ch := p.channel()
-	go func() {
-		for i := 0; ; i++ {
-			select {
-			case <-quit:
-				close(files)
-				return
-			case err := <-p.errs:
-				if err != nil {
-					handle(err, quit)
-				}
-			case f := <-ch:
-				if f == nil {
-					close(files)
-					return
-				}
-				files <- f.(*File)
-			}
-		}
-	}()
-	return files
-}
-
 func folders(p *paginated) (int, <-chan *Folder, chan error) {
 	folders := make(chan *Folder)
 	ch := p.channel()
@@ -411,6 +308,56 @@ func folders(p *paginated) (int, <-chan *Folder, chan error) {
 		close(folders)
 	}()
 	return p.n, folders, p.errs
+}
+
+func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File {
+	files := make(chan *File)
+	quit := make(chan int, 1)
+	ch := p.channel()
+	go func() {
+		defer close(files)
+		for i := 0; ; i++ {
+			select {
+			case <-quit:
+				return
+			case err := <-p.errs:
+				if err != nil {
+					handle(err, quit)
+				}
+			case f := <-ch:
+				if f == nil {
+					return
+				}
+				files <- f.(*File)
+			}
+		}
+	}()
+	return files
+}
+
+func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Folder {
+	folders := make(chan *Folder)
+	quit := make(chan int, 1)
+	ch := p.channel()
+	go func() {
+		defer close(folders)
+		for i := 0; ; i++ {
+			select {
+			case <-quit:
+				return
+			case err := <-p.errs:
+				if err != nil {
+					handle(err, quit)
+				}
+			case f := <-ch:
+				if f == nil {
+					return
+				}
+				folders <- f.(*Folder)
+			}
+		}
+	}()
+	return folders
 }
 
 func defaultErrorHandler(err error, quit chan int) {

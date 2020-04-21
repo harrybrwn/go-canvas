@@ -2,9 +2,11 @@ package canvas
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"sync"
 )
@@ -99,4 +101,67 @@ func (p *paginated) channel() <-chan interface{} {
 		close(p.errs)
 	}()
 	return p.objects
+}
+
+func (p *paginated) collect() ([]interface{}, error) {
+	p.channel()
+	collection := make([]interface{}, 0, p.n*10)
+	for {
+		select {
+		case err := <-p.errs:
+			if err != nil {
+				return nil, err
+			}
+		case obj := <-p.objects:
+			if obj == nil {
+				return collection, nil
+			}
+			collection = append(collection, obj)
+		}
+	}
+}
+
+var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
+
+func newLinkedResource(rsp *http.Response) (*linkedResource, error) {
+	var err error
+	resource := &linkedResource{
+		resp:  rsp,
+		links: map[string]*link{},
+	}
+	links := rsp.Header.Get("Link")
+	parts := resourceRegex.FindAllStringSubmatch(links, -1)
+
+	for _, part := range parts {
+		resource.links[part[2]], err = newlink(part[1])
+		if err != nil {
+			return resource, err
+		}
+	}
+	return resource, nil
+}
+
+type linkedResource struct {
+	resp  *http.Response
+	links map[string]*link
+}
+
+type link struct {
+	url  *url.URL
+	page int
+}
+
+func newlink(urlstr string) (*link, error) {
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		return nil, err
+	}
+	page, err := strconv.ParseInt(u.Query().Get("page"), 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse page num: %w", err)
+	}
+	return &link{
+		url:  u,
+		page: int(page),
+	}, nil
 }
