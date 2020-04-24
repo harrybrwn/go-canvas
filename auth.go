@@ -50,13 +50,17 @@ func get(client doer, endpoint string, vals encoder) (*http.Response, error) {
 	})
 }
 
-func (c *client) getjson(obj interface{}, endpoint string, vals encoder) error {
-	resp, err := c.get(endpoint, vals)
+func getjson(client doer, obj interface{}, path string, vals encoder) error {
+	resp, err := get(client, path, vals)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	return json.NewDecoder(resp.Body).Decode(obj)
+}
+
+func (c *client) getjson(obj interface{}, endpoint string, vals encoder) error {
+	return getjson(c, obj, endpoint, vals)
 }
 
 type hasclient interface {

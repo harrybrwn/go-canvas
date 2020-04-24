@@ -38,7 +38,7 @@ type File struct {
 	PreviewURL      string      `json:"preview_url"`
 
 	// PageNumber give the page number that this
-	// file was sent in.
+	// file was sent in. Will be 0 if it was not from a paginated list.
 	PageNumber int `json:"-"`
 
 	client *client

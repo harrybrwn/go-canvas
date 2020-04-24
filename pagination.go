@@ -72,7 +72,7 @@ func (p *paginated) firstReq() (int, *http.Response) {
 }
 
 func (p *paginated) channel() <-chan interface{} {
-	n, resp := p.firstReq()
+	n, resp := p.firstReq() // n pages and first request
 	p.wg.Add(n)
 
 	go func() {

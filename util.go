@@ -50,6 +50,10 @@ func (o *option) Value() []string {
 }
 
 func makeparams(opts ...Param) params {
+	return paramsFromList(opts)
+}
+
+func paramsFromList(opts []Param) params {
 	p := params{}
 	for _, o := range opts {
 		p[o.Name()] = o.Value()

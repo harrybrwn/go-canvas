@@ -96,24 +96,11 @@ func (c *Course) Files(opts ...Param) <-chan *File {
 	return onlyFiles(pages, c.errorHandler)
 }
 
-// Folders will retrieve the course's folders.
-func (c *Course) Folders() <-chan *Folder {
-	pages := c.pagination(
-		c.folderspath(),
-		foldersInitFunc(c.client),
-	)
-	return onlyFolders(pages, c.errorHandler)
-}
-
-// FilesChan will return a channel that sends File structs
-// and a channel that sends errors.
-func (c *Course) FilesChan() (<-chan *File, <-chan error) {
-	p := c.pagination(
-		c.filespath(),
-		filesInitFunc(c.client),
-	)
-	_, files, errs := files(p)
-	return files, errs
+// File will get a specific file id.
+func (c *Course) File(id int) (*File, error) {
+	f := &File{}
+	path := fmt.Sprintf("courses/%d/files/%d", c.ID, id)
+	return f, getjson(c.client, f, path, nil)
 }
 
 // ListFiles returns a slice of files for the course.
@@ -132,6 +119,34 @@ func (c *Course) ListFiles(opts ...Param) ([]*File, error) {
 		files[i] = o.(*File)
 	}
 	return files, nil
+}
+
+// Folders will retrieve the course's folders.
+func (c *Course) Folders(opts ...Param) <-chan *Folder {
+	pages := c.pagination(
+		c.folderspath(),
+		foldersInitFunc(c.client),
+		opts...,
+	)
+	return onlyFolders(pages, c.errorHandler)
+}
+
+// Folder will the a folder from the course given a folder id.
+func (c *Course) Folder(id int, opts ...Param) (*Folder, error) {
+	f := &Folder{}
+	path := fmt.Sprintf("courses/%d/folders/%d", c.ID, id)
+	return f, getjson(c.client, f, path, nil)
+}
+
+// FilesChan will return a channel that sends File structs
+// and a channel that sends errors.
+func (c *Course) FilesChan() (<-chan *File, <-chan error) {
+	p := c.pagination(
+		c.filespath(),
+		filesInitFunc(c.client),
+	)
+	_, files, errs := files(p)
+	return files, errs
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -288,10 +303,6 @@ func (c *Course) folderspath() string {
 	return fmt.Sprintf("courses/%d/folders", c.ID)
 }
 
-func (c *Course) setClient(cl *client) {
-	c.client = cl
-}
-
 func files(p *paginated) (int, <-chan *File, chan error) {
 	files := make(chan *File)
 	ch := p.channel()
@@ -341,6 +352,7 @@ func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File
 	return results
 }
 
+// omg where are generics when i need them
 func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Folder {
 	results := make(chan *Folder)
 	quit := make(chan int, 1)
