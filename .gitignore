@@ -1,7 +1,11 @@
 # Env
 .vscode
 *.code-workspace
+TODO
 
 # Data
 *.json
 testdata/
+
+# Tools
+*.swp

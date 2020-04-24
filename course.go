@@ -1,9 +1,7 @@
 package canvas
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"path"
 	"time"
 )
@@ -89,27 +87,42 @@ type Course struct {
 }
 
 // Files returns a channel of all the course's files
-func (c *Course) Files() <-chan *File {
-	pages := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
+func (c *Course) Files(opts ...Param) <-chan *File {
+	pages := c.pagination(
+		c.filespath(),
+		filesInitFunc(c.client),
+		opts...,
+	)
 	return onlyFiles(pages, c.errorHandler)
 }
 
+// Folders will retrieve the course's folders.
 func (c *Course) Folders() <-chan *Folder {
-	pages := newPaginatedList(c.client, c.folderspath(), foldersInitFunc(c.client))
+	pages := c.pagination(
+		c.folderspath(),
+		foldersInitFunc(c.client),
+	)
 	return onlyFolders(pages, c.errorHandler)
 }
 
 // FilesChan will return a channel that sends File structs
 // and a channel that sends errors.
 func (c *Course) FilesChan() (<-chan *File, <-chan error) {
-	p := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
+	p := c.pagination(
+		c.filespath(),
+		filesInitFunc(c.client),
+	)
 	_, files, errs := files(p)
 	return files, errs
 }
 
 // ListFiles returns a slice of files for the course.
-func (c *Course) ListFiles() ([]*File, error) {
-	p := newPaginatedList(c.client, c.filespath(), filesInitFunc(c.client))
+func (c *Course) ListFiles(opts ...Param) ([]*File, error) {
+	p := c.pagination(
+		c.filespath(),
+		filesInitFunc(c.client),
+		opts...,
+	)
 	objects, err := p.collect()
 	if err != nil {
 		return nil, err
@@ -130,6 +143,14 @@ func (c *Course) ListFiles() ([]*File, error) {
 // code is receiving the channel will end gracefully.
 func (c *Course) SetErrorHandler(f func(error, chan int)) {
 	c.errorHandler = f
+}
+
+func (c *Course) pagination(
+	path string,
+	init pageInitFunction,
+	params ...Param,
+) *paginated {
+	return newPaginatedList(c.client, path, init, params...)
 }
 
 // CourseOption is a string type that defines the available course options.
@@ -271,21 +292,6 @@ func (c *Course) setClient(cl *client) {
 	c.client = cl
 }
 
-func decodeAndCloseFiles(rc io.ReadCloser) ([]*File, error) {
-	files := make([]*File, 0)
-	var err error
-	defer func() {
-		e := rc.Close()
-		if err == nil {
-			err = e
-		}
-	}()
-	if err = json.NewDecoder(rc).Decode(&files); err != nil {
-		return nil, err
-	}
-	return files, err
-}
-
 func files(p *paginated) (int, <-chan *File, chan error) {
 	files := make(chan *File)
 	ch := p.channel()
@@ -311,11 +317,11 @@ func folders(p *paginated) (int, <-chan *Folder, chan error) {
 }
 
 func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File {
-	files := make(chan *File)
+	results := make(chan *File)
 	quit := make(chan int, 1)
 	ch := p.channel()
 	go func() {
-		defer close(files)
+		defer close(results)
 		for i := 0; ; i++ {
 			select {
 			case <-quit:
@@ -328,19 +334,19 @@ func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File
 				if f == nil {
 					return
 				}
-				files <- f.(*File)
+				results <- f.(*File)
 			}
 		}
 	}()
-	return files
+	return results
 }
 
 func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Folder {
-	folders := make(chan *Folder)
+	results := make(chan *Folder)
 	quit := make(chan int, 1)
 	ch := p.channel()
 	go func() {
-		defer close(folders)
+		defer close(results)
 		for i := 0; ; i++ {
 			select {
 			case <-quit:
@@ -353,11 +359,11 @@ func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Fo
 				if f == nil {
 					return
 				}
-				folders <- f.(*Folder)
+				results <- f.(*Folder)
 			}
 		}
 	}()
-	return folders
+	return results
 }
 
 func defaultErrorHandler(err error, quit chan int) {

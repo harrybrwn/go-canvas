@@ -37,11 +37,26 @@ type File struct {
 	LockExplanation string      `json:"lock_explanation"`
 	PreviewURL      string      `json:"preview_url"`
 
+	// PageNumber give the page number that this
+	// file was sent in.
+	PageNumber int `json:"-"`
+
 	client *client
+	folder *Folder
 }
 
+// Folder will get the folder that the file is a part of.
 func (f *File) Folder() (*Folder, error) {
-	return nil, nil
+	if f.folder != nil {
+		return f.folder, nil
+	}
+	resp, err := get(f.client, fmt.Sprintf("folders/%d", f.FolderID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	f.folder = &Folder{client: f.client}
+	return f.folder, json.NewDecoder(resp.Body).Decode(f.folder)
 }
 
 // Folder is a folder
@@ -72,15 +87,38 @@ type Folder struct {
 	ForSubmissions bool        `json:"for_submissions"`
 
 	client *client
+	parent *Folder
 }
 
+// Parent will get the folder's parent folder.
+func (f *Folder) Parent() (*Folder, error) {
+	if f.parent != nil {
+		return f.parent, nil
+	}
+	resp, err := get(f.client, fmt.Sprintf("folders/%d", f.ParentFolderID), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	f.parent = &Folder{client: f.client}
+	return f.parent, json.NewDecoder(resp.Body).Decode(f.parent)
+}
+
+// Files will return a channel that sends all of the files
+// in the folder.
 func (f *Folder) Files() <-chan *File {
 	pages := newPaginatedList(f.client, fmt.Sprintf("folders/%d/files", f.ID), filesInitFunc(f.client))
 	return onlyFiles(pages, defaultErrorHandler)
 }
 
-func filesInitFunc(c *client) func(io.Reader) ([]interface{}, error) {
-	return func(r io.Reader) ([]interface{}, error) {
+// Folders will return a channel that sends all of the sub-folders.
+func (f *Folder) Folders() <-chan *Folder {
+	pages := newPaginatedList(f.client, fmt.Sprintf("folders/%d/folders", f.ID), filesInitFunc(f.client))
+	return onlyFolders(pages, defaultErrorHandler)
+}
+
+func filesInitFunc(c *client) pageInitFunction {
+	return func(page int, r io.Reader) ([]interface{}, error) {
 		files := make([]*File, 0)
 		if err := json.NewDecoder(r).Decode(&files); err != nil {
 			return nil, err
@@ -94,8 +132,8 @@ func filesInitFunc(c *client) func(io.Reader) ([]interface{}, error) {
 	}
 }
 
-func foldersInitFunc(c *client) func(io.Reader) ([]interface{}, error) {
-	return func(r io.Reader) ([]interface{}, error) {
+func foldersInitFunc(c *client) pageInitFunction {
+	return func(page int, r io.Reader) ([]interface{}, error) {
 		folders := make([]*Folder, 0)
 		if err := json.NewDecoder(r).Decode(&folders); err != nil {
 			return nil, err

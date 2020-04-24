@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"sync"
 	"testing"
@@ -41,35 +40,17 @@ func testCourse() *Course {
 
 func TestAuth(t *testing.T) {
 	c := testCourse()
-	i := 0
-	files := c.Files()
+	files := c.Files(
+		ContentType("application/pdf"),
+		SortOpt("created_at", "size"),
+	)
 	for f := range files {
-		i++
-		fmt.Printf("%d %T %d %s\n", i, f, f.ID, f.Filename)
+		fmt.Println(f.CreatedAt, f.Size, f.Filename)
 	}
-	// var stream chan interface{} = files
-}
-
-func TestCourse(t *testing.T) {
-	c := testCourse()
-	path := fmt.Sprintf("courses/%d/files", c.ID)
-	resp, err := c.client.get(path, url.Values{
-		"sort": {"created_at"},
-		"page": {"1"},
-	})
-	if err != nil {
-		t.Error(err)
-	}
-	defer resp.Body.Close()
-
-	// links, err := newLinkedResource(resp)
+	// p := makeparams(
+	// 	ArrayOpt("content_type")
+	// )
+	// resp, err := get(c.client, c.filespath(), p)
 	// if err != nil {
-	// 	t.Error(err)
 	// }
-	// last := links.links["last"]
-	// fmt.Println(last.page)
-}
-
-func TestEndpoints(t *testing.T) {
-
 }

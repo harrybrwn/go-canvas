@@ -76,7 +76,3 @@ func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Host = a.host
 	return a.rt.RoundTrip(req)
 }
-
-type encoder interface {
-	Encode() string
-}

@@ -11,15 +11,23 @@ import (
 	"sync"
 )
 
+type pageInitFunction func(int, io.Reader) ([]interface{}, error)
+
 func newPaginatedList(
 	d doer,
 	path string,
-	init func(io.Reader) ([]interface{}, error),
+	init pageInitFunction,
+	parameters ...Param,
 ) *paginated {
+	query := params{}
+	for _, p := range parameters {
+		query[p.Name()] = p.Value()
+	}
 	return &paginated{
 		do:      d,
-		init:    init,
 		path:    path,
+		query:   query,
+		init:    init,
 		wg:      new(sync.WaitGroup),
 		objects: make(chan interface{}),
 		errs:    make(chan error),
@@ -27,32 +35,37 @@ func newPaginatedList(
 }
 
 type paginated struct {
-	path string
-	do   doer
+	path  string
+	query params
+	do    doer
 
 	n       int
 	objects chan interface{}
 	errs    chan error
 
 	wg   *sync.WaitGroup
-	init func(io.Reader) ([]interface{}, error)
+	init pageInitFunction
 }
 
-// returns <number of pages>, <response>
+// returns <number of pages>, <first response
 func (p *paginated) firstReq() (int, *http.Response) {
-	resp, err := get(p.do, p.path, url.Values{
-		"page": {"1"},
-	})
+	q := params{"page": {"1"}, "per_page": {"10"}}
+	q.Join(p.query)
+	resp, err := get(p.do, p.path, q)
 	if err != nil {
 		p.errs <- err
+		return 0, nil
 	}
 	pages, err := newLinkedResource(resp)
 	if err != nil {
 		p.errs <- err
+		return 0, nil
 	}
 	lastpage, ok := pages.links["last"]
 	if !ok {
-		p.errs <- errors.New("could not find last page")
+		err = errors.New("could not find last page")
+		p.errs <- err
+		return 0, nil
 	}
 	p.n = lastpage.page
 	return p.n, resp
@@ -64,7 +77,7 @@ func (p *paginated) channel() <-chan interface{} {
 
 	go func() {
 		defer resp.Body.Close()
-		list, err := p.init(resp.Body)
+		list, err := p.init(1, resp.Body)
 		if err != nil {
 			p.errs <- err
 			return
@@ -76,15 +89,15 @@ func (p *paginated) channel() <-chan interface{} {
 	}()
 	for page := 2; page <= n; page++ {
 		go func(page int64, path string) {
-			resp, err := get(p.do, path, url.Values{
-				"page": {strconv.FormatInt(page, 10)},
-			})
+			q := params{"page": {strconv.FormatInt(page, 10)}, "per_page": {"10"}}
+			q.Join(p.query)
+			resp, err := get(p.do, path, q)
 			if err != nil {
 				p.errs <- err
 				return
 			}
 			defer resp.Body.Close()
-			obs, err := p.init(resp.Body)
+			obs, err := p.init(int(page), resp.Body)
 			if err != nil {
 				p.errs <- err
 				return
@@ -119,6 +132,11 @@ func (p *paginated) collect() ([]interface{}, error) {
 			collection = append(collection, obj)
 		}
 	}
+}
+
+func (p *paginated) ordered() ([]interface{}, error) {
+
+	return nil, nil
 }
 
 var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
