@@ -1,6 +1,8 @@
 package canvas
 
-import "net/url"
+import (
+	"net/url"
+)
 
 // FromToken will create a Canvas struct from an api token
 func FromToken(token string) *Canvas {
@@ -36,6 +38,17 @@ func (c *Canvas) CompletedCourses(options ...string) ([]*Course, error) {
 		"enrollment_state": {"completed"},
 		"include[]":        options,
 	})
+}
+
+// CurrentUser get the currently logged in user.
+func (c *Canvas) CurrentUser() (*User, error) {
+	u := &User{client: c.client}
+	return u, getjson(c.client, u, "users/self", nil)
+}
+
+// CurrentUserTodo will get the current user's todo's.
+func (c *Canvas) CurrentUserTodo() error {
+	panic("not implimented")
 }
 
 func (c *Canvas) getCourses(vals encoder) ([]*Course, error) {

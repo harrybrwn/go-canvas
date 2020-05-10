@@ -1,3 +1,5 @@
 module github.com/harrybrwn/go-canvas
 
 go 1.14
+
+require github.com/spf13/cobra v1.0.0

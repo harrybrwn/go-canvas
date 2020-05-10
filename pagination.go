@@ -17,7 +17,7 @@ func newPaginatedList(
 	d doer,
 	path string,
 	init pageInitFunction,
-	parameters ...Param,
+	parameters ...Option,
 ) *paginated {
 	query := params{}
 	for _, p := range parameters {
@@ -135,7 +135,6 @@ func (p *paginated) collect() ([]interface{}, error) {
 }
 
 func (p *paginated) ordered() ([]interface{}, error) {
-
 	return nil, nil
 }
 

@@ -6,6 +6,50 @@ import (
 	"time"
 )
 
+// CourseOption is a string type that defines the available course options.
+type CourseOption string
+
+const (
+	// NeedsGradingCountOpt is a course option
+	NeedsGradingCountOpt CourseOption = "needs_grading_count"
+	// SyllabusBodyOpt is a course option
+	SyllabusBodyOpt CourseOption = "syllabus_body"
+	// PublicDescriptionOpt is a course option
+	PublicDescriptionOpt CourseOption = "public_description"
+	// TotalScoresOpt is a course option
+	TotalScoresOpt CourseOption = "total_scores"
+	// CurrentGradingPeriodScoresOpt is a course option
+	CurrentGradingPeriodScoresOpt CourseOption = "current_grading_period_scores"
+	// TermOpt is a course option
+	TermOpt CourseOption = "term"
+	// AccountOpt is a course option
+	AccountOpt CourseOption = "account"
+	// CourseProgressOpt is a course option
+	CourseProgressOpt CourseOption = "course_progress"
+	// SectionsOpt is a course option
+	SectionsOpt CourseOption = "sections"
+	// StorageQuotaUsedMBOpt is a course option
+	StorageQuotaUsedMBOpt CourseOption = "storage_quota_used_mb"
+	// TotalStudentsOpt is a course option
+	TotalStudentsOpt CourseOption = "total_students"
+	// PassbackStatusOpt is a course option
+	PassbackStatusOpt CourseOption = "passback_status"
+	// FavoritesOpt is a course option
+	FavoritesOpt CourseOption = "favorites"
+	// TeachersOpt is a course option
+	TeachersOpt CourseOption = "teachers"
+	// ObservedUsersOpt is a course option
+	ObservedUsersOpt CourseOption = "observed_users"
+	// CourseImageOpt is a course option
+	CourseImageOpt CourseOption = "course_image"
+	// ConcludedOpt is a course option
+	ConcludedOpt CourseOption = "concluded"
+)
+
+func (opt CourseOption) String() string {
+	return string(opt)
+}
+
 // Course represents a canvas course.
 type Course struct {
 	ID                   int         `json:"id"`
@@ -87,7 +131,7 @@ type Course struct {
 }
 
 // Files returns a channel of all the course's files
-func (c *Course) Files(opts ...Param) <-chan *File {
+func (c *Course) Files(opts ...Option) <-chan *File {
 	pages := c.pagination(
 		c.filespath(),
 		filesInitFunc(c.client),
@@ -104,7 +148,7 @@ func (c *Course) File(id int) (*File, error) {
 }
 
 // ListFiles returns a slice of files for the course.
-func (c *Course) ListFiles(opts ...Param) ([]*File, error) {
+func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
 	p := c.pagination(
 		c.filespath(),
 		filesInitFunc(c.client),
@@ -122,7 +166,7 @@ func (c *Course) ListFiles(opts ...Param) ([]*File, error) {
 }
 
 // Folders will retrieve the course's folders.
-func (c *Course) Folders(opts ...Param) <-chan *Folder {
+func (c *Course) Folders(opts ...Option) <-chan *Folder {
 	pages := c.pagination(
 		c.folderspath(),
 		foldersInitFunc(c.client),
@@ -132,15 +176,15 @@ func (c *Course) Folders(opts ...Param) <-chan *Folder {
 }
 
 // Folder will the a folder from the course given a folder id.
-func (c *Course) Folder(id int, opts ...Param) (*Folder, error) {
+func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 	f := &Folder{}
 	path := fmt.Sprintf("courses/%d/folders/%d", c.ID, id)
 	return f, getjson(c.client, f, path, nil)
 }
 
-// FilesChan will return a channel that sends File structs
+// FilesErrChan will return a channel that sends File structs
 // and a channel that sends errors.
-func (c *Course) FilesChan() (<-chan *File, <-chan error) {
+func (c *Course) FilesErrChan() (<-chan *File, <-chan error) {
 	p := c.pagination(
 		c.filespath(),
 		filesInitFunc(c.client),
@@ -163,53 +207,9 @@ func (c *Course) SetErrorHandler(f func(error, chan int)) {
 func (c *Course) pagination(
 	path string,
 	init pageInitFunction,
-	params ...Param,
+	params ...Option,
 ) *paginated {
 	return newPaginatedList(c.client, path, init, params...)
-}
-
-// CourseOption is a string type that defines the available course options.
-type CourseOption string
-
-const (
-	// NeedsGradingCountOpt is a course option
-	NeedsGradingCountOpt CourseOption = "needs_grading_count"
-	// SyllabusBodyOpt is a course option
-	SyllabusBodyOpt CourseOption = "syllabus_body"
-	// PublicDescriptionOpt is a course option
-	PublicDescriptionOpt CourseOption = "public_description"
-	// TotalScoresOpt is a course option
-	TotalScoresOpt CourseOption = "total_scores"
-	// CurrentGradingPeriodScoresOpt is a course option
-	CurrentGradingPeriodScoresOpt CourseOption = "current_grading_period_scores"
-	// TermOpt is a course option
-	TermOpt CourseOption = "term"
-	// AccountOpt is a course option
-	AccountOpt CourseOption = "account"
-	// CourseProgressOpt is a course option
-	CourseProgressOpt CourseOption = "course_progress"
-	// SectionsOpt is a course option
-	SectionsOpt CourseOption = "sections"
-	// StorageQuotaUsedMBOpt is a course option
-	StorageQuotaUsedMBOpt CourseOption = "storage_quota_used_mb"
-	// TotalStudentsOpt is a course option
-	TotalStudentsOpt CourseOption = "total_students"
-	// PassbackStatusOpt is a course option
-	PassbackStatusOpt CourseOption = "passback_status"
-	// FavoritesOpt is a course option
-	FavoritesOpt CourseOption = "favorites"
-	// TeachersOpt is a course option
-	TeachersOpt CourseOption = "teachers"
-	// ObservedUsersOpt is a course option
-	ObservedUsersOpt CourseOption = "observed_users"
-	// CourseImageOpt is a course option
-	CourseImageOpt CourseOption = "course_image"
-	// ConcludedOpt is a course option
-	ConcludedOpt CourseOption = "concluded"
-)
-
-func (opt CourseOption) String() string {
-	return string(opt)
 }
 
 // Term is a school term. One school year.

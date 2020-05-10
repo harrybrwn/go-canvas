@@ -38,6 +38,12 @@ func testCourse() *Course {
 	return testingCourse
 }
 
+func TestCanvas(t *testing.T) {
+	c := testCanvas()
+	c.CurrentUser()
+
+}
+
 func TestAuth(t *testing.T) {
 	c := testCourse()
 	files := c.Files(
