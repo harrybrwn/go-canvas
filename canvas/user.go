@@ -20,7 +20,8 @@ type User struct {
 	EffectiveLocale string      `json:"effective_locale"`
 	LastLogin       time.Time   `json:"last_login"`
 	TimeZone        string      `json:"time_zone"`
-	Bio             string      `json:"bio"`
+
+	Bio string `json:"bio"`
 
 	CanUpdateAvatar bool `json:"can_update_avatar"`
 	Permissions     struct {

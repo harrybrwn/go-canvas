@@ -7,6 +7,9 @@ func Execute() {
 	root.Execute()
 }
 
+type Cli struct {
+}
+
 var root = &cobra.Command{
 	Use: "canvas",
 }
