@@ -2,10 +2,12 @@ package canvas
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 )
 
 // DefaultHost is the default url host for the canvas api.
@@ -82,6 +84,14 @@ type hasclient interface {
 	setClient(*client)
 }
 
+func authorize(c *http.Client, token, host string) {
+	c.Transport = &auth{
+		rt:    http.DefaultTransport,
+		token: token,
+		host:  host,
+	}
+}
+
 type auth struct {
 	rt    http.RoundTripper
 	token string
@@ -94,4 +104,32 @@ func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Scheme = "https"
 	req.URL.Host = a.host
 	return a.rt.RoundTrip(req)
+}
+
+func checkErrors(errs []*errorMsg) error {
+	if len(errs) < 1 {
+		return nil
+	}
+	msgs := make([]string, len(errs))
+	for i := 0; i < len(errs); i++ {
+		msgs[i] = fmt.Sprintf("canvas: %s", errs[i].Message)
+	}
+	return errors.New(strings.Join(msgs, ", "))
+}
+
+type authError struct {
+	Status string
+	Errors []*errorMsg
+}
+
+func (ae *authError) Error() string {
+	return fmt.Sprintf("%s: %v", ae.Status, checkErrors(ae.Errors))
+}
+
+type errorMsg struct {
+	Message string
+}
+
+func (em *errorMsg) Error() string {
+	return em.Message
 }

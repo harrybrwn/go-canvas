@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"fmt"
 	"net/url"
 )
 
@@ -44,3 +45,21 @@ func (p params) Encode() string {
 }
 
 var _ encoder = (*params)(nil)
+
+func errpair(first, second error) error {
+	if first == nil || second == nil {
+		if first != nil { // should check the first error first
+			return first
+		}
+		return second
+	}
+	return &errorpair{first, second}
+}
+
+type errorpair struct {
+	e1, e2 error
+}
+
+func (e *errorpair) Error() string {
+	return fmt.Sprintf("%s, %s", e.e1.Error(), e.e2.Error())
+}
