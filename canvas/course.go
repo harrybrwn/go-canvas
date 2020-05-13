@@ -291,6 +291,86 @@ type Enrollment struct {
 	CurrentPeriodUnpostedFinalGrade   string  `json:"current_period_unposted_final_grade"`
 }
 
+// Quizzes will get all the course quizzes
+func (c *Course) Quizzes(opts ...Option) ([]*Quiz, error) {
+	return getQuizzes(c.client, c.ID, opts)
+}
+
+// Quiz will return a quiz given a quiz id.
+func (c *Course) Quiz(id int, opts ...Option) (*Quiz, error) {
+	return getQuiz(c.client, c.ID, id, opts)
+}
+
+func getQuizzes(client *client, courseID int, opts []Option) ([]*Quiz, error) {
+	q := make([]*Quiz, 0)
+	err := client.getjson(
+		&q, fmt.Sprintf("courses/%d/quizzes", courseID), asParams(opts),
+	)
+	return q, err
+}
+
+func getQuiz(client *client, course, quiz int, opts []Option) (*Quiz, error) {
+	q := &Quiz{}
+	err := client.getjson(
+		q, fmt.Sprintf("courses/%d/quizzes/%d", course, quiz), asParams(opts))
+	return q, err
+}
+
+// Quiz is a quiz json response.
+type Quiz struct {
+	ID       int         `json:"id"`
+	Title    string      `json:"title"`
+	DueAt    string      `json:"due_at"`
+	LockAt   interface{} `json:"lock_at"`
+	UnlockAt string      `json:"unlock_at"`
+
+	HTMLURL                       string          `json:"html_url"`
+	MobileURL                     string          `json:"mobile_url"`
+	PreviewURL                    string          `json:"preview_url"`
+	Description                   string          `json:"description"`
+	QuizType                      string          `json:"quiz_type"`
+	AssignmentGroupID             int             `json:"assignment_group_id"`
+	TimeLimit                     int             `json:"time_limit"`
+	ShuffleAnswers                bool            `json:"shuffle_answers"`
+	HideResults                   string          `json:"hide_results"`
+	ShowCorrectAnswers            bool            `json:"show_correct_answers"`
+	ShowCorrectAnswersLastAttempt bool            `json:"show_correct_answers_last_attempt"`
+	ShowCorrectAnswersAt          time.Time       `json:"show_correct_answers_at"`
+	HideCorrectAnswersAt          time.Time       `json:"hide_correct_answers_at"`
+	OneTimeResults                bool            `json:"one_time_results"`
+	ScoringPolicy                 string          `json:"scoring_policy"`
+	AllowedAttempts               int             `json:"allowed_attempts"`
+	OneQuestionAtATime            bool            `json:"one_question_at_a_time"`
+	QuestionCount                 int             `json:"question_count"`
+	PointsPossible                int             `json:"points_possible"`
+	CantGoBack                    bool            `json:"cant_go_back"`
+	AccessCode                    string          `json:"access_code"`
+	IPFilter                      string          `json:"ip_filter"`
+	Published                     bool            `json:"published"`
+	Unpublishable                 bool            `json:"unpublishable"`
+	LockedForUser                 bool            `json:"locked_for_user"`
+	LockInfo                      interface{}     `json:"lock_info"`
+	LockExplanation               string          `json:"lock_explanation"`
+	SpeedgraderURL                string          `json:"speedgrader_url"`
+	QuizExtensionsURL             string          `json:"quiz_extensions_url"`
+	Permissions                   QuizPermissions `json:"permissions"`
+	AllDates                      []string        `json:"all_dates"`
+	VersionNumber                 int             `json:"version_number"`
+	QuestionTypes                 []string        `json:"question_types"`
+	AnonymousSubmissions          bool            `json:"anonymous_submissions"`
+}
+
+// QuizPermissions is the permissions for a quiz.
+type QuizPermissions struct {
+	Read           bool `json:"read"`
+	Submit         bool `json:"submit"`
+	Create         bool `json:"create"`
+	Manage         bool `json:"manage"`
+	ReadStatistics bool `json:"read_statistics"`
+	ReviewGrades   bool `json:"review_grades"`
+	Update         bool `json:"update"`
+}
+
 func (c *Course) path(p ...string) string {
 	return path.Join(p...)
 }

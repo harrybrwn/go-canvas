@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"fmt"
 	"net/url"
 )
 
@@ -18,8 +19,8 @@ type Canvas struct {
 
 // Courses lists all of the courses associated
 // with that canvas object.
-func (c *Canvas) Courses() ([]*Course, error) {
-	return c.getCourses(nil)
+func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
+	return c.getCourses(asParams(opts))
 }
 
 // ActiveCourses returns a list of only the courses that are
@@ -40,10 +41,16 @@ func (c *Canvas) CompletedCourses(options ...string) ([]*Course, error) {
 	})
 }
 
-// CurrentUser get the currently logged in user.
-func (c *Canvas) CurrentUser() (*User, error) {
+// GetUser will return a user object given that user's ID.
+func (c *Canvas) GetUser(id int, opts ...Option) (*User, error) {
 	u := &User{client: c.client}
-	return u, getjson(c.client, u, "users/self", nil)
+	return u, c.client.getjson(u, fmt.Sprintf("users/%d", id), asParams(opts))
+}
+
+// CurrentUser get the currently logged in user.
+func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
+	u := &User{client: c.client}
+	return u, getjson(c.client, u, "users/self", asParams(opts))
 }
 
 // CurrentUserTodo will get the current user's todo's.

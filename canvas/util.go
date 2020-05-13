@@ -5,10 +5,10 @@ import (
 )
 
 func makeparams(opts ...Option) params {
-	return paramsFromList(opts)
+	return asParams(opts)
 }
 
-func paramsFromList(opts []Option) params {
+func asParams(opts []Option) params {
 	p := params{}
 	for _, o := range opts {
 		p[o.Name()] = o.Value()

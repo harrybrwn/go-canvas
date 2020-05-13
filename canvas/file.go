@@ -107,13 +107,21 @@ func (f *Folder) Parent() (*Folder, error) {
 // Files will return a channel that sends all of the files
 // in the folder.
 func (f *Folder) Files() <-chan *File {
-	pages := newPaginatedList(f.client, fmt.Sprintf("folders/%d/files", f.ID), filesInitFunc(f.client))
+	pages := newPaginatedList(
+		f.client,
+		fmt.Sprintf("folders/%d/files", f.ID),
+		filesInitFunc(f.client),
+	)
 	return onlyFiles(pages, defaultErrorHandler)
 }
 
 // Folders will return a channel that sends all of the sub-folders.
 func (f *Folder) Folders() <-chan *Folder {
-	pages := newPaginatedList(f.client, fmt.Sprintf("folders/%d/folders", f.ID), filesInitFunc(f.client))
+	pages := newPaginatedList(
+		f.client,
+		fmt.Sprintf("folders/%d/folders", f.ID),
+		filesInitFunc(f.client),
+	)
 	return onlyFolders(pages, defaultErrorHandler)
 }
 

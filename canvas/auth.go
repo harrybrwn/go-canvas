@@ -50,6 +50,21 @@ func get(client doer, endpoint string, vals encoder) (*http.Response, error) {
 	})
 }
 
+func put(client doer, endpoint string, vals encoder) (*http.Response, error) {
+	var q string
+	if vals != nil {
+		q = vals.Encode()
+	}
+	return client.Do(&http.Request{
+		Method: "PUT",
+		Proto:  "HTTP/1.1",
+		URL: &url.URL{
+			Path:     path.Join("/api/v1", endpoint),
+			RawQuery: q,
+		},
+	})
+}
+
 func getjson(client doer, obj interface{}, path string, vals encoder) error {
 	resp, err := get(client, path, vals)
 	if err != nil {

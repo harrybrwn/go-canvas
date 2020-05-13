@@ -19,14 +19,10 @@ func newPaginatedList(
 	init pageInitFunction,
 	parameters ...Option,
 ) *paginated {
-	query := params{}
-	for _, p := range parameters {
-		query[p.Name()] = p.Value()
-	}
 	return &paginated{
 		do:      d,
 		path:    path,
-		query:   query,
+		query:   asParams(parameters),
 		init:    init,
 		wg:      new(sync.WaitGroup),
 		objects: make(chan interface{}),

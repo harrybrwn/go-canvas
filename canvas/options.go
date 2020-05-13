@@ -33,8 +33,43 @@ func SortOpt(schemes ...string) Option {
 }
 
 // ContentType retruns a option param for getting a content type.
-func ContentType(contentType string) Option {
-	return ArrayOpt("content_types", contentType)
+func ContentType(contentTypes ...string) Option {
+	return ArrayOpt("content_types", contentTypes...)
+}
+
+// UserOpt creates an Option that should be sent
+// when asking for a user, updating a user, or creating a user.
+func UserOpt(key, val string) Option {
+	return &prefixedOption{key: key, val: []string{val}, prefix: "user"}
+}
+
+func asPrefixed(prefix string, opt Option) Option {
+	return &prefixedOption{
+		key:    opt.Name(),
+		val:    opt.Value(),
+		prefix: prefix,
+	}
+}
+
+func toPrefixedOpts(prefix string, opts []Option) []Option {
+	prefixed := make([]Option, len(opts))
+	for i := range opts {
+		prefixed[i] = asPrefixed(prefix, opts[i])
+	}
+	return prefixed
+}
+
+type prefixedOption struct {
+	key, prefix string
+	val         []string
+}
+
+func (po *prefixedOption) Name() string {
+	return fmt.Sprintf("%s[%s]", po.prefix, po.key)
+}
+
+func (po *prefixedOption) Value() []string {
+	return po.val
 }
 
 type option struct {

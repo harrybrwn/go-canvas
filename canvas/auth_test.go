@@ -40,8 +40,20 @@ func testCourse() *Course {
 
 func TestCanvas(t *testing.T) {
 	c := testCanvas()
-	c.CurrentUser()
-
+	u, err := c.CurrentUser()
+	if err != nil {
+		t.Error(err)
+	}
+	colors, err := u.GetColors()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(colors)
+	col, err := u.GetColor("course_11010000000004557")
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(col)
 }
 
 func TestAuth(t *testing.T) {
