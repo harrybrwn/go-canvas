@@ -125,6 +125,16 @@ type Course struct {
 	errorHandler func(error, chan int)
 }
 
+// Settings gets the course settings
+func (c *Course) Settings(opts ...Option) (map[string]interface{}, error) {
+	settings := make(map[string]interface{})
+	err := getjson(c.client, &settings, fmt.Sprintf("/courses/%d/settings", c.ID), asParams(opts))
+	if err != nil {
+		return nil, err
+	}
+	return settings, nil
+}
+
 // Activity returns a course's activity data
 func (c *Course) Activity() error {
 	res := struct {

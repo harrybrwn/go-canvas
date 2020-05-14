@@ -5,6 +5,7 @@ TODO
 
 # Data
 *.json
+*.txt
 testdata/
 
 # Tools

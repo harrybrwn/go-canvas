@@ -51,7 +51,7 @@ func newFilesCmd() *cobra.Command {
 		Short: "This is a garbage command lol.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			token := viper.GetString("token")
-			c := canvas.FromToken(token)
+			c := canvas.New(token)
 			courses, err := c.ActiveCourses()
 			if err != nil {
 				return err
