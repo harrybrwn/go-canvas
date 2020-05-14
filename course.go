@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -121,18 +122,81 @@ type Course struct {
 		} `json:"wiki_page"`
 	} `json:"blueprint_restrictions_by_object_type"`
 
-	client       *client
+	// client       *client
+	client       doer
 	errorHandler func(error, chan int)
 }
 
 // Settings gets the course settings
-func (c *Course) Settings(opts ...Option) (map[string]interface{}, error) {
-	settings := make(map[string]interface{})
-	err := getjson(c.client, &settings, fmt.Sprintf("/courses/%d/settings", c.ID), asParams(opts))
+func (c *Course) Settings(opts ...Option) (*CourseSettings, error) {
+	res := struct {
+		*CourseSettings
+		*AuthError
+	}{nil, nil}
+	err := getjson(c.client, &res, fmt.Sprintf("/courses/%d/settings", c.ID), asParams(opts))
 	if err != nil {
 		return nil, err
 	}
-	return settings, nil
+	if res.AuthError != nil {
+		return nil, res.AuthError
+	}
+	return res.CourseSettings, nil
+}
+
+// UpdateSettings will update a user's settings based on a given settings struct.
+func (c *Course) UpdateSettings(settings *CourseSettings) error {
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		return err
+	}
+	m := make(map[string]interface{})
+	if err = json.Unmarshal(raw, &m); err != nil {
+		return err
+	}
+
+	vals := make(params)
+	for k, v := range m {
+		vals[k] = []string{fmt.Sprintf("%v", v)}
+	}
+	resp, err := put(c.client, fmt.Sprintf("/courses/%d/settings", c.ID), vals)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	e := &AuthError{}
+	return errpair(e, json.NewDecoder(resp.Body).Decode(e))
+}
+
+// CourseSettings is a json struct for a course's settings.
+type CourseSettings struct {
+	AllowStudentDiscussionTopics  bool `json:"allow_student_discussion_topics"`
+	AllowStudentForumAttachments  bool `json:"allow_student_forum_attachments"`
+	AllowStudentDiscussionEditing bool `json:"allow_student_discussion_editing"`
+	GradingStandardEnabled        bool `json:"grading_standard_enabled"`
+	GradingStandardID             int  `json:"grading_standard_id"`
+	AllowStudentOrganizedGroups   bool `json:"allow_student_organized_groups"`
+	HideFinalGrades               bool `json:"hide_final_grades"`
+	HideDistributionGraphs        bool `json:"hide_distribution_graphs"`
+	LockAllAnnouncements          bool `json:"lock_all_announcements"`
+	UsageRightsRequired           bool `json:"usage_rights_required"`
+}
+
+// Users will get a list of users in the course
+func (c *Course) Users(opts ...Option) (users []User, err error) {
+	return users, getarr(
+		c.client, &users,
+		asParams(opts),
+		"/courses/%d/users", c.ID,
+	)
+}
+
+// SearchUsers will search for a user in the course
+func (c *Course) SearchUsers(opts ...Option) (users []User, err error) {
+	return users, getarr(
+		c.client, &users,
+		asParams(opts),
+		"/courses/%d/search_users", c.ID,
+	)
 }
 
 // Activity returns a course's activity data

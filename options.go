@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"fmt"
-	"strings"
 )
 
 // Option is a key value pair used
@@ -21,9 +20,18 @@ func Opt(key, val string) Option {
 // ArrayOpt creates an option that will be sent as an
 // array of options (ex. include[], content_type[], etc.)
 func ArrayOpt(key string, vals ...string) Option {
-	return &option{
-		key: fmt.Sprintf("%s[]", key),
-		val: strings.Join(vals, ","),
+	return &arropt{
+		key:  fmt.Sprintf("%s[]", key),
+		vals: vals,
+	}
+}
+
+// IncludeOpt is the option for any "include[]" api
+// parameters.
+func IncludeOpt(vals ...string) Option {
+	return &arropt{
+		key:  "include[]",
+		vals: vals,
 	}
 }
 
@@ -82,4 +90,17 @@ func (o *option) Name() string {
 
 func (o *option) Value() []string {
 	return []string{o.val}
+}
+
+type arropt struct {
+	key  string
+	vals []string
+}
+
+func (ao *arropt) Name() string {
+	return ao.key
+}
+
+func (ao *arropt) Value() []string {
+	return ao.vals
 }

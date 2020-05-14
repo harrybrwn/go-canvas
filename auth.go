@@ -1,7 +1,9 @@
 package canvas
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -76,6 +78,28 @@ func getjson(client doer, obj interface{}, path string, vals encoder) error {
 	return json.NewDecoder(resp.Body).Decode(obj)
 }
 
+func getarr(c doer, arr interface{}, vals encoder, path string, v ...interface{}) error {
+	resp, err := get(c, fmt.Sprintf(path, v...), vals)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var buf bytes.Buffer
+	if _, err = buf.ReadFrom(resp.Body); err != nil {
+		return err
+	}
+	if err = json.Unmarshal(buf.Bytes(), arr); err != nil {
+		e := &AuthError{}
+		err = errpair(e, json.Unmarshal(buf.Bytes(), e))
+		if e.Message != "" {
+			return errors.New(e.Message)
+		}
+		return err
+	}
+	return nil
+}
+
 type hasclient interface {
 	setClient(*client)
 }
@@ -115,8 +139,9 @@ func checkErrors(errs []errorMsg) string {
 
 // AuthError is an authentication error response from canvas.
 type AuthError struct {
-	Status string
-	Errors []errorMsg
+	Status  string
+	Errors  []errorMsg
+	Message string
 }
 
 func (ae *AuthError) Error() string {

@@ -147,7 +147,6 @@ func newLinkedResource(header http.Header) (*linkedResource, error) {
 		links: map[string]*link{},
 	}
 	links := header.Get("Link")
-	fmt.Println(links)
 	parts := resourceRegex.FindAllStringSubmatch(links, -1)
 
 	for _, part := range parts {

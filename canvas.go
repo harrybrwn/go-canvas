@@ -1,12 +1,11 @@
 package canvas
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // New will create a Canvas struct from an api token.
@@ -33,13 +32,13 @@ type Canvas struct {
 // Courses lists all of the courses associated
 // with that canvas object.
 func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
-	return c.getCourses(asParams(opts))
+	return getCourses(c.client, "/courses", asParams(opts))
 }
 
 // ActiveCourses returns a list of only the courses that are
 // currently active
 func (c *Canvas) ActiveCourses(options ...string) ([]*Course, error) {
-	return c.getCourses(&url.Values{
+	return getCourses(c.client, "/courses", &url.Values{
 		"enrollment_state": {"active"},
 		"include[]":        options,
 	})
@@ -48,7 +47,7 @@ func (c *Canvas) ActiveCourses(options ...string) ([]*Course, error) {
 // CompletedCourses returns a list of only the courses that are
 // not currently active and have been completed
 func (c *Canvas) CompletedCourses(options ...string) ([]*Course, error) {
-	return c.getCourses(&url.Values{
+	return getCourses(c.client, "/courses", &url.Values{
 		"enrollment_state": {"completed"},
 		"include[]":        options,
 	})
@@ -84,31 +83,130 @@ func (c *Canvas) CurrentAccount() (*Account, error) {
 	return res.Account, nil
 }
 
+// Accounts will list the accounts
+func (c *Canvas) Accounts(opts ...Option) (accounts []Account, err error) {
+	return accounts, getarr(c.client, &accounts, asParams(opts), "/accounts")
+}
+
+// CourseAccounts will make a call to the course accounts endpoint
+func (c *Canvas) CourseAccounts(opts ...Option) (acts []Account, err error) {
+	err = getarr(c.client, &acts, asParams(opts), "/course_accounts")
+	if err != nil {
+		return nil, err
+	}
+	for i := range acts {
+		acts[i].cli = c.client
+	}
+	return
+}
+
+// Account is an account
+type Account struct {
+	ID              int    `json:"id"`
+	Name            string `json:"name"`
+	UUID            string `json:"uuid"`
+	ParentAccountID int    `json:"parent_account_id"`
+	RootAccountID   int    `json:"root_account_id"`
+	WorkflowState   string `json:"workflow_state"`
+	DefaultTimeZone string `json:"default_time_zone"`
+	IntegrationID   string `json:"integration_id"`
+	SisAccountID    string `json:"sis_account_id"`
+	SisImportID     int    `json:"sis_import_id"`
+	LtiGUID         string `json:"lti_guid"`
+
+	// Storage Quotas
+	DefaultStorageQuotaMB      int `json:"default_storage_quota_mb"`
+	DefaultUserStorageQuotaMB  int `json:"default_user_storage_quota_mb"`
+	DefaultGroupStorageQuotaMB int `json:"default_group_storage_quota_mb"`
+
+	Domain   string      `json:"domain"`
+	Distance interface{} `json:"distance"`
+	// Authentication Provider
+	AuthProvider string `json:"authentication_provider"`
+
+	cli doer
+}
+
+// Courses returns the account's list of courses
+func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
+	err = getarr(a.cli, &courses, asParams(opts), "/accounts/%d/courses", a.ID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range courses {
+		courses[i].client = a.cli
+	}
+	return
+}
+
+// SearchAccounts will search for canvas accounts.
+// Options: name, domain, latitude, longitude
+//
+// 	c.SearchAccouts(Opt("name", "My School Name"))
+func (c *Canvas) SearchAccounts(opts ...Option) (acts []Account, err error) {
+	err = getarr(c.client, &acts, asParams(opts), "/accounts/search")
+	if err != nil {
+		return nil, err
+	}
+	for i := range acts {
+		acts[i].cli = c.client
+	}
+	return
+}
+
 // Announcements will get the announcements
-func (c *Canvas) Announcements(opts ...Option) error {
-	res := struct {
-		*AuthError
-		Message string
-	}{nil, ""}
-	if err := getjson(c.client, &res, "/announcements", asParams(opts)); err != nil {
-		return err
-	}
-	if res.AuthError != nil {
-		return res.AuthError
-	}
-	if res.Message == "" {
-		return errors.New(res.Message)
-	}
-	return nil
+func (c *Canvas) Announcements(contexCodes []string, opts ...Option) (arr []DiscussionTopic, err error) {
+	params := asParams(opts)
+	params["context_codes"] = contexCodes
+	return arr, getarr(c.client, &arr, params, "/announcements")
+}
+
+// DiscussionTopic is a discussion topic
+type DiscussionTopic struct {
+	ID                      int         `json:"id"`
+	Title                   string      `json:"title"`
+	Message                 string      `json:"message"`
+	HTMLURL                 string      `json:"html_url"`
+	PostedAt                time.Time   `json:"posted_at"`
+	LastReplyAt             time.Time   `json:"last_reply_at"`
+	RequireInitialPost      bool        `json:"require_initial_post"`
+	UserCanSeePosts         bool        `json:"user_can_see_posts"`
+	DiscussionSubentryCount int         `json:"discussion_subentry_count"`
+	ReadState               string      `json:"read_state"`
+	UnreadCount             int         `json:"unread_count"`
+	Subscribed              bool        `json:"subscribed"`
+	SubscriptionHold        string      `json:"subscription_hold"`
+	AssignmentID            interface{} `json:"assignment_id"`
+	DelayedPostAt           interface{} `json:"delayed_post_at"`
+	Published               bool        `json:"published"`
+	LockAt                  interface{} `json:"lock_at"`
+	Locked                  bool        `json:"locked"`
+	Pinned                  bool        `json:"pinned"`
+	LockedForUser           bool        `json:"locked_for_user"`
+	LockInfo                interface{} `json:"lock_info"`
+	LockExplanation         string      `json:"lock_explanation"`
+	UserName                string      `json:"user_name"`
+	TopicChildren           []int       `json:"topic_children"`
+	GroupTopicChildren      []struct {
+		ID      int `json:"id"`
+		GroupID int `json:"group_id"`
+	} `json:"group_topic_children"`
+	RootTopicID     interface{} `json:"root_topic_id"`
+	PodcastURL      string      `json:"podcast_url"`
+	DiscussionType  string      `json:"discussion_type"`
+	GroupCategoryID interface{} `json:"group_category_id"`
+	Attachments     interface{} `json:"attachments"`
+	Permissions     struct {
+		Attach bool `json:"attach"`
+	} `json:"permissions"`
+	AllowRating        bool `json:"allow_rating"`
+	OnlyGradersCanRate bool `json:"only_graders_can_rate"`
+	SortByRating       bool `json:"sort_by_rating"`
 }
 
 // CalendarEvents makes a call to get calendar events.
-func (c *Canvas) CalendarEvents(opts ...Option) ([]CalendarEvent, error) {
-	cal := []CalendarEvent{}
-	if err := getjson(c.client, &cal, "/calendar_events", asParams(opts)); err != nil {
-		return nil, err
-	}
-	return cal, nil
+func (c *Canvas) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
+	return cal, getarr(c.client, &cal, asParams(opts), "/calendar_events")
 }
 
 // CalendarEvent is a calendar event
@@ -146,30 +244,9 @@ type CalendarEvent struct {
 	Group                      interface{} `json:"group"`
 }
 
-// Accounts will list the accounts
-func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
-	accounts := []Account{}
-	if err := getjson(c.client, &accounts, "/accounts", asParams(opts)); err != nil {
-		return nil, err
-	}
-	return accounts, nil
-}
-
-// CourseAccounts will make a call to the course accounts endpoint
-func (c *Canvas) CourseAccounts(opts ...Option) ([]Account, error) {
-	accounts := []Account{}
-	if err := getjson(c.client, &accounts, "/course_accounts", asParams(opts)); err != nil {
-		return nil, err
-	}
-	return accounts, nil
-}
-
-// Account is an account
-type Account struct{}
-
 // Bookmarks will get the current user's bookmarks.
-func (c *Canvas) Bookmarks(opts ...Option) ([]Bookmark, error) {
-	return getBookmarks(c.client, "self", opts)
+func (c *Canvas) Bookmarks(opts ...Option) (b []Bookmark, err error) {
+	return b, getarr(c.client, &b, asParams(opts), "/users/self/bookmarks")
 }
 
 // CreateBookmark will take a bookmark and send it to canvas.
@@ -209,53 +286,16 @@ func getUser(c doer, pathVar interface{}, opts []Option) (*User, error) {
 	return res.User, nil
 }
 
-func (c *Canvas) getCourses(vals encoder) ([]*Course, error) {
-	crs := make([]*Course, 0)
-	resp, err := get(c.client, "/courses", vals)
+func getCourses(c doer, path string, vals encoder) (crs []*Course, err error) {
+	err = getarr(c, &crs, vals, path)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	// read the response into a buffer
-	var b bytes.Buffer
-	if _, err = b.ReadFrom(resp.Body); err != nil {
-		return nil, err
-	}
-
-	// try to unmarshal the response into a course array
-	// if it fails then we unmarshal it into an error
-	if err = json.Unmarshal(b.Bytes(), &crs); err != nil {
-		e := &AuthError{}
-		err = json.Unmarshal(b.Bytes(), e)
-		return nil, errpair(e, err) // return any and all non-nil errors
-	}
-
 	for i := range crs {
-		crs[i].client = c.client
+		crs[i].client = c
 		crs[i].errorHandler = defaultErrorHandler
 	}
 	return crs, nil
-}
-
-func getBookmarks(d doer, id interface{}, opts []Option) ([]Bookmark, error) {
-	resp, err := get(d, fmt.Sprintf("users/%v/bookmarks", id), asParams(opts))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var (
-		b         bytes.Buffer
-		bookmarks []Bookmark
-	)
-	if _, err = b.ReadFrom(resp.Body); err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(b.Bytes(), &bookmarks); err != nil {
-		e := &AuthError{}
-		return nil, errpair(json.Unmarshal(b.Bytes(), e), e)
-	}
-	return bookmarks, nil
 }
 
 func createBookmark(d doer, id interface{}, b *Bookmark) error {

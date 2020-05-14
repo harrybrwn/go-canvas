@@ -37,7 +37,7 @@ type File struct {
 	LockExplanation string      `json:"lock_explanation"`
 	PreviewURL      string      `json:"preview_url"`
 
-	client *client
+	client doer
 	folder *Folder
 }
 
@@ -82,7 +82,7 @@ type Folder struct {
 	LockedForUser  bool        `json:"locked_for_user"`
 	ForSubmissions bool        `json:"for_submissions"`
 
-	client *client
+	client doer
 	parent *Folder
 }
 
@@ -123,7 +123,7 @@ func (f *Folder) Folders() <-chan *Folder {
 	return onlyFolders(pages, defaultErrorHandler)
 }
 
-func filesInitFunc(c *client) pageInitFunction {
+func filesInitFunc(c doer) pageInitFunction {
 	return func(page int, r io.Reader) ([]interface{}, error) {
 		files := make([]*File, 0)
 		if err := json.NewDecoder(r).Decode(&files); err != nil {
@@ -138,7 +138,7 @@ func filesInitFunc(c *client) pageInitFunction {
 	}
 }
 
-func foldersInitFunc(c *client) pageInitFunction {
+func foldersInitFunc(c doer) pageInitFunction {
 	return func(page int, r io.Reader) ([]interface{}, error) {
 		folders := make([]*Folder, 0)
 		if err := json.NewDecoder(r).Decode(&folders); err != nil {

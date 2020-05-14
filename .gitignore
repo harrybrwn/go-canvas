@@ -7,6 +7,7 @@ TODO
 *.json
 *.txt
 testdata/
+gen/
 
 # Tools
 *.swp

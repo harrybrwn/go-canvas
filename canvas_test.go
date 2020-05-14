@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 
@@ -41,14 +40,8 @@ func testCourses() ([]*Course, error) {
 }
 
 func Test(t *testing.T) {
-	is := is.New(t)
-
-	c := New(testToken())
-	// u, err := c.CurrentUser()
-	// is.NoErr(err)
-	cal, err := c.CalendarEvents()
-	is.NoErr(err)
-	fmt.Println(cal)
+	// is := is.New(t)
+	// c := New(testToken())
 }
 
 func TestCanvas(t *testing.T) {
@@ -79,6 +72,16 @@ func TestCanvas(t *testing.T) {
 			t.Error("course should have gotten an error handling function")
 		}
 	}
+}
+
+func TestAnnouncements(t *testing.T) {
+	is := is.New(t)
+	c := New(testToken())
+	_, err := c.Announcements([]string{})
+	is.True(err != nil)
+
+	_, err = c.Announcements([]string{"course_1"})
+	is.NoErr(err)
 }
 
 func TestCanvas_Err(t *testing.T) {

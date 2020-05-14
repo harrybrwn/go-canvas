@@ -6,25 +6,25 @@ import (
 	"time"
 )
 
-// User is a user
+// User is a canvas user
 type User struct {
 	ID              int        `json:"id"`
 	Name            string     `json:"name"`
+	Email           string     `json:"email"`
+	Bio             string     `json:"bio"`
 	SortableName    string     `json:"sortable_name"`
 	ShortName       string     `json:"short_name"`
 	SisUserID       string     `json:"sis_user_id"`
 	SisImportID     int        `json:"sis_import_id"`
-	CreatedAt       time.Time  `json:"created_at"`
 	IntegrationID   string     `json:"integration_id"`
+	CreatedAt       time.Time  `json:"created_at"`
 	LoginID         string     `json:"login_id"`
 	AvatarURL       string     `json:"avatar_url"`
 	Enrollments     Enrollment `json:"enrollments"`
-	Email           string     `json:"email"`
 	Locale          string     `json:"locale"`
 	EffectiveLocale string     `json:"effective_locale"`
 	LastLogin       time.Time  `json:"last_login"`
 	TimeZone        string     `json:"time_zone"`
-	Bio             string     `json:"bio"`
 
 	CanUpdateAvatar bool `json:"can_update_avatar"`
 	Permissions     struct {
@@ -36,10 +36,9 @@ type User struct {
 }
 
 // Settings will get the user's settings.
-func (u *User) Settings() (map[string]interface{}, error) {
+func (u *User) Settings() (settings map[string]interface{}, err error) {
 	// TODO: find the settings json response and use a struct not a map
-	settings := make(map[string]interface{})
-	if err := getjson(u.client, &settings, fmt.Sprintf("/users/%d/settings", u.ID), nil); err != nil {
+	if err = getjson(u.client, &settings, fmt.Sprintf("/users/%d/settings", u.ID), nil); err != nil {
 		return nil, err
 	}
 	errors, eok := settings["errors"]
@@ -51,8 +50,17 @@ func (u *User) Settings() (map[string]interface{}, error) {
 }
 
 // Bookmarks will get the user's bookmarks
-func (u *User) Bookmarks(opts ...Option) ([]Bookmark, error) {
-	return getBookmarks(u.client, u.ID, opts)
+func (u *User) Bookmarks(opts ...Option) (bks []Bookmark, err error) {
+	return bks, getarr(
+		u.client, &bks,
+		asParams(opts),
+		"users/%d/bookmarks", u.ID,
+	)
+}
+
+// Courses will return the user's courses.
+func (u *User) Courses(opts ...Option) ([]*Course, error) {
+	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), asParams(opts))
 }
 
 // Profile will make a call to get the user's profile data.
@@ -90,9 +98,8 @@ type UserProfile struct {
 }
 
 // GradedSubmissions gets the user's graded submissions.
-func (u *User) GradedSubmissions() ([]*Submission, error) {
-	var submissions []*Submission
-	return submissions, getjson(u.client, &submissions, fmt.Sprintf("/users/%d/graded_submissions", u.ID), nil)
+func (u *User) GradedSubmissions() (subs []*Submission, err error) {
+	return subs, getarr(u.client, &subs, nil, "/users/%d/graded_submissions", u.ID)
 }
 
 // Submission is a submission type.
@@ -129,12 +136,8 @@ type Submission struct {
 }
 
 // Avatars will get a list of the user's avatars.
-func (u *User) Avatars() ([]Avatar, error) {
-	avatars := []Avatar{}
-	if err := getjson(u.client, &avatars, fmt.Sprintf("/users/%d/avatars", u.ID), nil); err != nil {
-		return nil, err
-	}
-	return avatars, nil
+func (u *User) Avatars() (av []Avatar, err error) {
+	return av, getarr(u.client, &av, nil, "/users/%d/avatars", u.ID)
 }
 
 // Avatar is the avatar data for a user.
