@@ -37,17 +37,13 @@ type File struct {
 	LockExplanation string      `json:"lock_explanation"`
 	PreviewURL      string      `json:"preview_url"`
 
-	// PageNumber give the page number that this
-	// file was sent in. Will be 0 if it was not from a paginated list.
-	PageNumber int `json:"-"`
-
 	client *client
 	folder *Folder
 }
 
 // Folder will get the folder that the file is a part of.
 func (f *File) Folder() (*Folder, error) {
-	if f.folder != nil {
+	if f.folder != nil && f.folder.ID == f.FolderID {
 		return f.folder, nil
 	}
 	resp, err := get(f.client, fmt.Sprintf("folders/%d", f.FolderID), nil)
