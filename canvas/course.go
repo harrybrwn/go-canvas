@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"fmt"
-	"path"
 	"time"
 )
 
@@ -45,10 +44,6 @@ const (
 	// ConcludedOpt is a course option
 	ConcludedOpt CourseOption = "concluded"
 )
-
-func (opt CourseOption) String() string {
-	return string(opt)
-}
 
 // Course represents a canvas course.
 type Course struct {
@@ -130,14 +125,25 @@ type Course struct {
 	errorHandler func(error, chan int)
 }
 
+// Activity returns a course's activity data
+func (c *Course) Activity() error {
+	res := struct {
+		*AuthError
+	}{nil}
+	err := getjson(c.client, &res, fmt.Sprintf("/courses/%d/analytics/activity", c.ID), nil)
+	if err != nil {
+		return err
+	}
+	if res.AuthError != nil {
+		return res.AuthError
+	}
+	return nil
+}
+
 // Files returns a channel of all the course's files
 func (c *Course) Files(opts ...Option) <-chan *File {
-	pages := c.pagination(
-		c.filespath(),
-		filesInitFunc(c.client),
-		opts...,
-	)
-	return onlyFiles(pages, c.errorHandler)
+	pager := c.filespager(opts)
+	return onlyFiles(pager, c.errorHandler)
 }
 
 // File will get a specific file id.
@@ -149,11 +155,7 @@ func (c *Course) File(id int) (*File, error) {
 
 // ListFiles returns a slice of files for the course.
 func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
-	p := c.pagination(
-		c.filespath(),
-		filesInitFunc(c.client),
-		opts...,
-	)
+	p := c.filespager(opts)
 	objects, err := p.collect()
 	if err != nil {
 		return nil, err
@@ -167,12 +169,8 @@ func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
 
 // Folders will retrieve the course's folders.
 func (c *Course) Folders(opts ...Option) <-chan *Folder {
-	pages := c.pagination(
-		c.folderspath(),
-		foldersInitFunc(c.client),
-		opts...,
-	)
-	return onlyFolders(pages, c.errorHandler)
+	pager := c.folderspager(opts)
+	return onlyFolders(pager, c.errorHandler)
 }
 
 // Folder will the a folder from the course given a folder id.
@@ -182,15 +180,34 @@ func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 	return f, getjson(c.client, f, path, nil)
 }
 
+// ListFolders returns a slice of folders for the course.
+func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
+	p := c.folderspager(opts)
+	objects, err := p.collect()
+	if err != nil {
+		return nil, err
+	}
+	folders := make([]*Folder, len(objects))
+	for i, o := range objects {
+		folders[i] = o.(*Folder)
+	}
+	return folders, nil
+}
+
 // FilesErrChan will return a channel that sends File structs
 // and a channel that sends errors.
 func (c *Course) FilesErrChan() (<-chan *File, <-chan error) {
-	p := c.pagination(
-		c.filespath(),
-		filesInitFunc(c.client),
-	)
+	p := c.filespager(nil)
 	_, files, errs := files(p)
 	return files, errs
+}
+
+// FoldersErrChan will return a channel for receiving folders and one for
+// errors.
+func (c *Course) FoldersErrChan() (<-chan *Folder, <-chan error) {
+	p := c.folderspager(nil)
+	_, folders, errs := folders(p)
+	return folders, errs
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -202,14 +219,6 @@ func (c *Course) FilesErrChan() (<-chan *File, <-chan error) {
 // code is receiving the channel will end gracefully.
 func (c *Course) SetErrorHandler(f func(error, chan int)) {
 	c.errorHandler = f
-}
-
-func (c *Course) pagination(
-	path string,
-	init pageInitFunction,
-	params ...Option,
-) *paginated {
-	return newPaginatedList(c.client, path, init, params...)
 }
 
 // Term is a school term. One school year.
@@ -301,18 +310,20 @@ func (c *Course) Quiz(id int, opts ...Option) (*Quiz, error) {
 	return getQuiz(c.client, c.ID, id, opts)
 }
 
-func getQuizzes(client *client, courseID int, opts []Option) ([]*Quiz, error) {
+func getQuizzes(client doer, courseID int, opts []Option) ([]*Quiz, error) {
 	q := make([]*Quiz, 0)
-	err := client.getjson(
-		&q, fmt.Sprintf("courses/%d/quizzes", courseID), asParams(opts),
+	err := getjson(
+		client, &q,
+		fmt.Sprintf("courses/%d/quizzes", courseID),
+		asParams(opts),
 	)
 	return q, err
 }
 
-func getQuiz(client *client, course, quiz int, opts []Option) (*Quiz, error) {
+func getQuiz(client doer, course, quiz int, opts []Option) (*Quiz, error) {
 	q := &Quiz{}
-	err := client.getjson(
-		q, fmt.Sprintf("courses/%d/quizzes/%d", course, quiz), asParams(opts))
+	err := getjson(
+		client, q, fmt.Sprintf("courses/%d/quizzes/%d", course, quiz), asParams(opts))
 	return q, err
 }
 
@@ -371,16 +382,30 @@ type QuizPermissions struct {
 	Update         bool `json:"update"`
 }
 
-func (c *Course) path(p ...string) string {
-	return path.Join(p...)
-}
-
 func (c *Course) filespath() string {
 	return fmt.Sprintf("courses/%d/files", c.ID)
 }
 
 func (c *Course) folderspath() string {
 	return fmt.Sprintf("courses/%d/folders", c.ID)
+}
+
+func (c *Course) filespager(params []Option) *paginated {
+	return newPaginatedList(
+		c.client,
+		fmt.Sprintf("courses/%d/files", c.ID),
+		filesInitFunc(c.client),
+		params,
+	)
+}
+
+func (c *Course) folderspager(params []Option) *paginated {
+	return newPaginatedList(
+		c.client,
+		fmt.Sprintf("courses/%d/folders", c.ID),
+		foldersInitFunc(c.client),
+		params,
+	)
 }
 
 func files(p *paginated) (int, <-chan *File, chan error) {
@@ -407,9 +432,15 @@ func folders(p *paginated) (int, <-chan *Folder, chan error) {
 	return p.n, folders, p.errs
 }
 
-func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File {
+func onlyFiles(p *paginated, handle func(error, chan int)) <-chan *File {
 	results := make(chan *File)
-	quit := make(chan int, 1)
+	quit := make(chan int)
+	go func() {
+		// handle errors from the first request
+		if err := <-p.errs; err != nil {
+			handle(err, quit)
+		}
+	}()
 	ch := p.channel()
 	go func() {
 		defer close(results)
@@ -420,6 +451,7 @@ func onlyFiles(p *paginated, handle func(err error, quit chan int)) <-chan *File
 			case err := <-p.errs:
 				if err != nil {
 					handle(err, quit)
+					return
 				}
 			case f := <-ch:
 				if f == nil {

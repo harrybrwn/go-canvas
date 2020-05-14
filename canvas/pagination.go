@@ -17,8 +17,11 @@ func newPaginatedList(
 	d doer,
 	path string,
 	init pageInitFunction,
-	parameters ...Option,
+	parameters []Option,
 ) *paginated {
+	if parameters == nil {
+		parameters = []Option{}
+	}
 	return &paginated{
 		do:      d,
 		path:    path,
@@ -44,31 +47,33 @@ type paginated struct {
 }
 
 // returns <number of pages>, <first response
-func (p *paginated) firstReq() (int, *http.Response) {
+func (p *paginated) firstReq() (int, *http.Response, error) {
 	q := params{"page": {"1"}, "per_page": {"10"}}
 	q.Join(p.query)
 	resp, err := get(p.do, p.path, q)
 	if err != nil {
-		p.errs <- err
-		return 0, nil
+		return 0, nil, err
 	}
-	pages, err := newLinkedResource(resp)
+	pages, err := newLinkedResource(resp.Header)
 	if err != nil {
-		p.errs <- err
-		return 0, nil
+		return 0, nil, err
 	}
 	lastpage, ok := pages.links["last"]
 	if !ok {
-		err = errors.New("could not find last page")
-		p.errs <- err
-		return 0, nil
+		return 0, nil, errors.New("could not find last page")
 	}
 	p.n = lastpage.page
-	return p.n, resp
+	return p.n, resp, nil
 }
 
 func (p *paginated) channel() <-chan interface{} {
-	n, resp := p.firstReq() // n pages and first request
+	n, resp, err := p.firstReq() // n pages and first request
+	if err != nil {
+		p.errs <- err
+		close(p.errs)
+		close(p.objects)
+		return nil
+	}
 	p.wg.Add(n)
 
 	go func() {
@@ -136,13 +141,12 @@ func (p *paginated) ordered() ([]interface{}, error) {
 
 var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
 
-func newLinkedResource(rsp *http.Response) (*linkedResource, error) {
+func newLinkedResource(header http.Header) (*linkedResource, error) {
 	var err error
 	resource := &linkedResource{
-		resp:  rsp,
 		links: map[string]*link{},
 	}
-	links := rsp.Header.Get("Link")
+	links := header.Get("Link")
 	parts := resourceRegex.FindAllStringSubmatch(links, -1)
 
 	for _, part := range parts {
@@ -155,7 +159,7 @@ func newLinkedResource(rsp *http.Response) (*linkedResource, error) {
 }
 
 type linkedResource struct {
-	resp  *http.Response
+	// resp  *http.Response
 	links map[string]*link
 }
 

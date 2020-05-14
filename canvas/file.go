@@ -111,6 +111,7 @@ func (f *Folder) Files() <-chan *File {
 		f.client,
 		fmt.Sprintf("folders/%d/files", f.ID),
 		filesInitFunc(f.client),
+		nil,
 	)
 	return onlyFiles(pages, defaultErrorHandler)
 }
@@ -121,6 +122,7 @@ func (f *Folder) Folders() <-chan *Folder {
 		f.client,
 		fmt.Sprintf("folders/%d/folders", f.ID),
 		filesInitFunc(f.client),
+		nil,
 	)
 	return onlyFolders(pages, defaultErrorHandler)
 }

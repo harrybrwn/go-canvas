@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,42 +28,43 @@ type client struct {
 	http.Client
 }
 
-func (c *client) get(endpoint string, vals encoder) (*http.Response, error) {
-	return get(c, endpoint, vals)
-}
-
 type doer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-func get(client doer, endpoint string, vals encoder) (*http.Response, error) {
+func get(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	var q string
 	if vals != nil {
 		q = vals.Encode()
 	}
-	return client.Do(&http.Request{
-		Method: "GET",
-		Proto:  "HTTP/1.1",
-		URL: &url.URL{
-			Path:     path.Join("/api/v1", endpoint),
-			RawQuery: q,
-		},
-	})
+	return c.Do(newreq("GET", endpoint, q))
 }
 
-func put(client doer, endpoint string, vals encoder) (*http.Response, error) {
+func put(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	var q string
 	if vals != nil {
 		q = vals.Encode()
 	}
-	return client.Do(&http.Request{
-		Method: "PUT",
+	return c.Do(newreq("PUT", endpoint, q))
+}
+
+func post(c doer, endpoint string, vals encoder) (*http.Response, error) {
+	var q string
+	if vals != nil {
+		q = vals.Encode()
+	}
+	return c.Do(newreq("POST", endpoint, q))
+}
+
+func newreq(method, urlpath, query string) *http.Request {
+	return &http.Request{
+		Method: method,
 		Proto:  "HTTP/1.1",
 		URL: &url.URL{
-			Path:     path.Join("/api/v1", endpoint),
-			RawQuery: q,
+			Path:     path.Join("/api/v1", urlpath),
+			RawQuery: query,
 		},
-	})
+	}
 }
 
 func getjson(client doer, obj interface{}, path string, vals encoder) error {
@@ -74,10 +74,6 @@ func getjson(client doer, obj interface{}, path string, vals encoder) error {
 	}
 	defer resp.Body.Close()
 	return json.NewDecoder(resp.Body).Decode(obj)
-}
-
-func (c *client) getjson(obj interface{}, endpoint string, vals encoder) error {
-	return getjson(c, obj, endpoint, vals)
 }
 
 type hasclient interface {
@@ -106,30 +102,30 @@ func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	return a.rt.RoundTrip(req)
 }
 
-func checkErrors(errs []*errorMsg) error {
+func checkErrors(errs []errorMsg) string {
 	if len(errs) < 1 {
-		return nil
+		return ""
 	}
 	msgs := make([]string, len(errs))
 	for i := 0; i < len(errs); i++ {
-		msgs[i] = fmt.Sprintf("canvas: %s", errs[i].Message)
+		msgs[i] = fmt.Sprintf("%s", errs[i].Message)
 	}
-	return errors.New(strings.Join(msgs, ", "))
+	return strings.Join(msgs, ", ")
 }
 
-type authError struct {
+// AuthError is an authentication error response from canvas.
+type AuthError struct {
 	Status string
-	Errors []*errorMsg
+	Errors []errorMsg
 }
 
-func (ae *authError) Error() string {
-	return fmt.Sprintf("%s: %v", ae.Status, checkErrors(ae.Errors))
+func (ae *AuthError) Error() string {
+	if ae.Status == "" {
+		return checkErrors(ae.Errors)
+	}
+	return fmt.Sprintf("%s: %s", ae.Status, checkErrors(ae.Errors))
 }
 
 type errorMsg struct {
 	Message string
-}
-
-func (em *errorMsg) Error() string {
-	return em.Message
 }
