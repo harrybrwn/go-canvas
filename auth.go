@@ -1,9 +1,7 @@
 package canvas
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,18 +11,6 @@ import (
 
 // DefaultHost is the default url host for the canvas api.
 var DefaultHost = "canvas.instructure.com"
-
-func newclient(token string) *client {
-	return &client{
-		Client: http.Client{
-			Transport: &auth{
-				rt:    http.DefaultTransport,
-				token: token,
-				host:  DefaultHost,
-			},
-		},
-	}
-}
 
 type client struct {
 	http.Client
@@ -69,39 +55,23 @@ func newreq(method, urlpath, query string) *http.Request {
 	}
 }
 
-func getjson(client doer, obj interface{}, path string, vals encoder) error {
-	resp, err := get(client, path, vals)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return json.NewDecoder(resp.Body).Decode(obj)
-}
-
-func getarr(c doer, arr interface{}, vals encoder, path string, v ...interface{}) error {
-	resp, err := get(c, fmt.Sprintf(path, v...), vals)
+func getjson(client doer, obj interface{}, vals encoder, path string, v ...interface{}) error {
+	resp, err := get(client, fmt.Sprintf(path, v...), vals)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	var buf bytes.Buffer
-	if _, err = buf.ReadFrom(resp.Body); err != nil {
-		return err
+	var e error
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return json.NewDecoder(resp.Body).Decode(obj)
+	case http.StatusNotFound, http.StatusUnauthorized:
+		e = &AuthError{}
+	case http.StatusBadRequest:
+		e = &Error{}
 	}
-	if err = json.Unmarshal(buf.Bytes(), arr); err != nil {
-		e := &AuthError{}
-		err = errpair(e, json.Unmarshal(buf.Bytes(), e))
-		if e.Message != "" {
-			return errors.New(e.Message)
-		}
-		return err
-	}
-	return nil
-}
-
-type hasclient interface {
-	setClient(*client)
+	return errpair(e, json.NewDecoder(resp.Body).Decode(&e))
 }
 
 func authorize(c *http.Client, token, host string) {
@@ -137,11 +107,30 @@ func checkErrors(errs []errorMsg) string {
 	return strings.Join(msgs, ", ")
 }
 
+// Error is an error response.
+type Error struct {
+	Errors struct {
+		EndDate string `json:"end_date"`
+	} `json:"errors"`
+	// Errors  interface{} `json:"errors"`
+	Message string `json:"message"`
+}
+
+func (e *Error) Error() string {
+	var msg string
+	if e.Message != "" {
+		msg = e.Message
+	}
+	if e.Errors.EndDate != "" {
+		msg = e.Errors.EndDate
+	}
+	return msg
+}
+
 // AuthError is an authentication error response from canvas.
 type AuthError struct {
-	Status  string
-	Errors  []errorMsg
-	Message string
+	Status string     `json:"status"`
+	Errors []errorMsg `json:"errors"`
 }
 
 func (ae *AuthError) Error() string {
@@ -152,5 +141,5 @@ func (ae *AuthError) Error() string {
 }
 
 type errorMsg struct {
-	Message string
+	Message string `json:"message,omitempty"`
 }

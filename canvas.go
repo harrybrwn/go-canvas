@@ -2,37 +2,77 @@ package canvas
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
+
+// DefaultCanvas is the default canvas object
+var defaultCanvas *Canvas
+
+func init() {
+	token := os.Getenv("CANVAS_TOKEN")
+	defaultCanvas = New(token)
+}
 
 // New will create a Canvas struct from an api token.
 // New uses the default host.
 func New(token string) *Canvas {
-	return &Canvas{
-		client: newclient(token),
-	}
+	return WithHost(token, DefaultHost)
 }
 
 // WithHost will create a canvas object that uses a
 // different hostname.
 func WithHost(token, host string) *Canvas {
-	c := &Canvas{client: &client{http.Client{}}}
-	authorize(&c.client.Client, token, host)
+	c := &Canvas{client: &http.Client{}}
+	authorize(c.client, token, host)
 	return c
+}
+
+// SetToken will set the package level canvas object token.
+func SetToken(token string) {
+	defaultCanvas = New(token)
+}
+
+// SetHost will set the package level host.
+func SetHost(host string) error {
+	auth, ok := defaultCanvas.client.Transport.(*auth)
+	if !ok {
+		return errors.New("could not set canvas host")
+	}
+	auth.host = host
+	return nil
 }
 
 // Canvas is the main api controller.
 type Canvas struct {
-	client *client
+	client *http.Client
 }
 
 // Courses lists all of the courses associated
 // with that canvas object.
 func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(c.client, "/courses", asParams(opts))
+}
+
+// Courses lists all of the courses associated
+// with that canvas object.
+func Courses(opts ...Option) ([]*Course, error) {
+	return defaultCanvas.Courses(opts...)
+}
+
+// GetCourse will get a course given a course id.
+func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
+	course := &Course{client: c.client}
+	return course, getjson(c.client, &course, asParams(opts), "/courses/%d", id)
+}
+
+// GetCourse will get a course given a course id.
+func GetCourse(id int, opts ...Option) (*Course, error) {
+	return defaultCanvas.GetCourse(id, opts...)
 }
 
 // ActiveCourses returns a list of only the courses that are
@@ -58,9 +98,19 @@ func (c *Canvas) GetUser(id int, opts ...Option) (*User, error) {
 	return getUser(c.client, id, opts)
 }
 
+// GetUser will return a user object given that user's ID.
+func GetUser(id int, opts ...Option) (*User, error) {
+	return defaultCanvas.GetUser(id, opts...)
+}
+
 // CurrentUser get the currently logged in user.
 func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
 	return getUser(c.client, "self", opts)
+}
+
+// CurrentUser get the currently logged in user.
+func CurrentUser(opts ...Option) (*User, error) {
+	return defaultCanvas.CurrentUser(opts...)
 }
 
 // CurrentUserTodo will get the current user's todo's.
@@ -69,28 +119,36 @@ func (c *Canvas) CurrentUserTodo() error {
 }
 
 // CurrentAccount will get the current account.
-func (c *Canvas) CurrentAccount() (*Account, error) {
-	res := struct {
-		*Account
-		*AuthError
-	}{nil, nil}
-	if err := getjson(c.client, &res, "/accounts/self", nil); err != nil {
-		return nil, err
-	}
-	if res.AuthError != nil {
-		return nil, res.AuthError
-	}
-	return res.Account, nil
+func (c *Canvas) CurrentAccount() (a *Account, err error) {
+	a.cli = c.client
+	return a, getjson(c.client, a, nil, "/accounts/self")
+}
+
+// CurrentAccount will get the current account.
+func CurrentAccount() (a *Account, err error) {
+	return defaultCanvas.CurrentAccount()
 }
 
 // Accounts will list the accounts
 func (c *Canvas) Accounts(opts ...Option) (accounts []Account, err error) {
-	return accounts, getarr(c.client, &accounts, asParams(opts), "/accounts")
+	err = getjson(c.client, &accounts, asParams(opts), "/accounts")
+	if err != nil {
+		return nil, err
+	}
+	for i := range accounts {
+		accounts[i].cli = c.client
+	}
+	return
+}
+
+// Accounts will list the accounts
+func Accounts(opts ...Option) ([]Account, error) {
+	return defaultCanvas.Accounts()
 }
 
 // CourseAccounts will make a call to the course accounts endpoint
 func (c *Canvas) CourseAccounts(opts ...Option) (acts []Account, err error) {
-	err = getarr(c.client, &acts, asParams(opts), "/course_accounts")
+	err = getjson(c.client, &acts, asParams(opts), "/course_accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +156,11 @@ func (c *Canvas) CourseAccounts(opts ...Option) (acts []Account, err error) {
 		acts[i].cli = c.client
 	}
 	return
+}
+
+// CourseAccounts will make a call to the course accounts endpoint
+func CourseAccounts(opts ...Option) ([]Account, error) {
+	return defaultCanvas.CourseAccounts()
 }
 
 // Account is an account
@@ -129,14 +192,7 @@ type Account struct {
 
 // Courses returns the account's list of courses
 func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
-	err = getarr(a.cli, &courses, asParams(opts), "/accounts/%d/courses", a.ID)
-	if err != nil {
-		return nil, err
-	}
-	for i := range courses {
-		courses[i].client = a.cli
-	}
-	return
+	return getCourses(a.cli, fmt.Sprintf("/accounts/%d/courses", a.ID), asParams(opts))
 }
 
 // SearchAccounts will search for canvas accounts.
@@ -144,7 +200,7 @@ func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
 //
 // 	c.SearchAccouts(Opt("name", "My School Name"))
 func (c *Canvas) SearchAccounts(opts ...Option) (acts []Account, err error) {
-	err = getarr(c.client, &acts, asParams(opts), "/accounts/search")
+	err = getjson(c.client, &acts, asParams(opts), "/accounts/search")
 	if err != nil {
 		return nil, err
 	}
@@ -154,11 +210,34 @@ func (c *Canvas) SearchAccounts(opts ...Option) (acts []Account, err error) {
 	return
 }
 
+// SearchAccounts will search for canvas accounts.
+// Options: name, domain, latitude, longitude
+//
+// 	c.SearchAccouts(Opt("name", "My School Name"))
+func SearchAccounts(opts ...Option) ([]Account, error) {
+	return defaultCanvas.SearchAccounts(opts...)
+}
+
 // Announcements will get the announcements
-func (c *Canvas) Announcements(contexCodes []string, opts ...Option) (arr []DiscussionTopic, err error) {
+func (c *Canvas) Announcements(contextCodes []string, opts ...Option) (arr []DiscussionTopic, err error) {
 	params := asParams(opts)
-	params["context_codes"] = contexCodes
-	return arr, getarr(c.client, &arr, params, "/announcements")
+	params["context_codes"] = contextCodes
+	return arr, getjson(c.client, &arr, params, "/announcements")
+}
+
+// Announcements will get the announcements
+func Announcements(contextCodes []string, opts ...Option) ([]DiscussionTopic, error) {
+	return defaultCanvas.Announcements(contextCodes, opts...)
+}
+
+// CalendarEvents makes a call to get calendar events.
+func (c *Canvas) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
+	return cal, getjson(c.client, &cal, asParams(opts), "/calendar_events")
+}
+
+// CalendarEvents makes a call to get calendar events.
+func CalendarEvents(opts ...Option) ([]CalendarEvent, error) {
+	return defaultCanvas.CalendarEvents(opts...)
 }
 
 // DiscussionTopic is a discussion topic
@@ -204,14 +283,10 @@ type DiscussionTopic struct {
 	SortByRating       bool `json:"sort_by_rating"`
 }
 
-// CalendarEvents makes a call to get calendar events.
-func (c *Canvas) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
-	return cal, getarr(c.client, &cal, asParams(opts), "/calendar_events")
-}
-
 // CalendarEvent is a calendar event
 type CalendarEvent struct {
-	ID                         int         `json:"id"`
+	// ID                         int         `json:"id"`
+	ID                         string      `json:"id"`
 	Title                      string      `json:"title"`
 	StartAt                    string      `json:"start_at"`
 	EndAt                      string      `json:"end_at"`
@@ -235,23 +310,33 @@ type CalendarEvent struct {
 	AppointmentGroupID         interface{} `json:"appointment_group_id"`
 	AppointmentGroupURL        interface{} `json:"appointment_group_url"`
 	OwnReservation             bool        `json:"own_reservation"`
-	ReserveURL                 interface{} `json:"reserve_url"`
+	ReserveURL                 string      `json:"reserve_url"`
 	Reserved                   bool        `json:"reserved"`
 	ParticipantType            string      `json:"participant_type"`
 	ParticipantsPerAppointment interface{} `json:"participants_per_appointment"`
 	AvailableSlots             interface{} `json:"available_slots"`
-	User                       interface{} `json:"user"`
+	User                       *User       `json:"user"`
 	Group                      interface{} `json:"group"`
 }
 
 // Bookmarks will get the current user's bookmarks.
 func (c *Canvas) Bookmarks(opts ...Option) (b []Bookmark, err error) {
-	return b, getarr(c.client, &b, asParams(opts), "/users/self/bookmarks")
+	return b, getjson(c.client, &b, asParams(opts), "/users/self/bookmarks")
 }
 
 // CreateBookmark will take a bookmark and send it to canvas.
 func (c *Canvas) CreateBookmark(b *Bookmark) error {
 	return createBookmark(c.client, "self", b)
+}
+
+// Bookmarks will get the current user's bookmarks.
+func Bookmarks(opts ...Option) ([]Bookmark, error) {
+	return defaultCanvas.Bookmarks(opts...)
+}
+
+// CreateBookmark will take a bookmark and send it to canvas.
+func CreateBookmark(b *Bookmark) error {
+	return defaultCanvas.CreateBookmark(b)
 }
 
 // Bookmark is a bookmark object.
@@ -267,27 +352,16 @@ type Bookmark struct {
 
 // pathVar is an interface{} because internally, either "self" or some integer id
 // will be passed to be used as an api path parameter.
-func getUser(c doer, pathVar interface{}, opts []Option) (*User, error) {
-	res := struct {
-		*User
-		*AuthError
-	}{&User{client: c}, nil}
-
-	if err := getjson(
-		c, &res,
-		fmt.Sprintf("users/%v", pathVar),
-		asParams(opts),
-	); err != nil {
+func getUser(c doer, pathVar interface{}, opts []Option) (u *User, err error) {
+	u = &User{client: c}
+	if err = getjson(c, u, asParams(opts), "users/%v", pathVar); err != nil {
 		return nil, err
 	}
-	if res.AuthError != nil {
-		return nil, res.AuthError
-	}
-	return res.User, nil
+	return u, nil
 }
 
 func getCourses(c doer, path string, vals encoder) (crs []*Course, err error) {
-	err = getarr(c, &crs, vals, path)
+	err = getjson(c, &crs, vals, path)
 	if err != nil {
 		return nil, err
 	}

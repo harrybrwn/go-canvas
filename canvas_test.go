@@ -2,6 +2,8 @@ package canvas
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
@@ -9,16 +11,22 @@ import (
 )
 
 func testToken() string {
-	tok := os.Getenv("CANVAS_TOKEN")
+	// tok := os.Getenv("CANVAS_TOKEN")
+	tok := os.Getenv("CANVAS_TEST_TOKEN")
 	if tok == "" {
 		panic("no testing token")
 	}
 	return tok
 }
 
+func init() {
+	SetToken(testToken())
+}
+
 var (
 	testingUser    *User
 	testingCourses []*Course
+	testingCourse  *Course
 )
 
 func testUser() (*User, error) {
@@ -28,6 +36,17 @@ func testUser() (*User, error) {
 		testingUser, err = c.CurrentUser()
 	}
 	return testingUser, err
+}
+
+func testCourse() *Course {
+	if testingCourse == nil {
+		var err error
+		testingCourse, err = New(testToken()).GetCourse(2056049)
+		if err != nil {
+			panic("could not get test course: " + err.Error())
+		}
+	}
+	return testingCourse
 }
 
 func testCourses() ([]*Course, error) {
@@ -40,38 +59,6 @@ func testCourses() ([]*Course, error) {
 }
 
 func Test(t *testing.T) {
-	// is := is.New(t)
-	// c := New(testToken())
-}
-
-func TestCanvas(t *testing.T) {
-	t.Skip("don't really nead this test")
-	c := New(testToken())
-	if c == nil {
-		t.Fatal("get nil canvas object")
-	}
-	u, err := testUser()
-	if err != nil {
-		panic("could not get test user: " + err.Error())
-	}
-	if u == nil {
-		t.Error("got nil user")
-	}
-	if u.client == nil {
-		t.Error("user has no client")
-	}
-	courses, err := c.CompletedCourses()
-	if err != nil {
-		t.Error(err)
-	}
-	for _, crs := range courses {
-		if crs.client == nil {
-			t.Error("course should have gotten a client")
-		}
-		if crs.errorHandler == nil {
-			t.Error("course should have gotten an error handling function")
-		}
-	}
 }
 
 func TestAnnouncements(t *testing.T) {
@@ -197,35 +184,12 @@ func TestCourse_Files(t *testing.T) {
 			is.True(folder.ID != 0)
 		}
 	})
-
-	for file = range folder.Files() {
-		is.True(file.FolderID == folder.ID)
-	}
-	parent, err := file.Folder()
-	is.NoErr(err)
-	is.True(parent.ID == folder.ID)
-
-	t.Run("Course.Folder", func(t *testing.T) {
-		is := is.New(t)
-		f, err := c.Folder(parent.ID)
-		is.NoErr(err)
-		is.True(f.ID == parent.ID)
-		is.True(f.ID == file.FolderID)
-	})
-	t.Run("Course.File", func(t *testing.T) {
-		is := is.New(t)
-		f, err := c.File(file.ID)
-		is.NoErr(err)
-		is.True(f.ID == file.ID)
-		is.True(f.DisplayName == file.DisplayName)
-	})
 }
 
 func TestCourseFiles_Err(t *testing.T) {
 	is := is.New(t)
-	courses, err := testCourses()
-	is.NoErr(err)
-	c := courses[1]
+	c := testCourse()
+
 	errorCount := 0
 	c.SetErrorHandler(func(e error, q chan int) {
 		if e == nil {
@@ -267,12 +231,20 @@ func TestCourseFiles_Err(t *testing.T) {
 			is.True(f.ID == all[i].ID)
 			i++
 		}
-		is.True(len(all) >= i)
+		is.True(len(all) > i)
 		for range folders {
 			panic("this code should not execute")
 		}
 	})
-	is.Equal(errorCount, 2)
+	is.True(errorCount >= 2)
+	c.errorHandler = defaultErrorHandler
+}
+
+func TestAccount(t *testing.T) {
+	is := is.New(t)
+	c := New(testToken())
+	_, err := c.SearchAccounts(Opt("name", "UC Berkeley"))
+	is.NoErr(err)
 }
 
 func TestErrChan(t *testing.T) {
@@ -297,9 +269,9 @@ func TestErrPair(t *testing.T) {
 		{errpair(errors.New("one"), nil), "one"},
 		{errpair(nil, errors.New("two")), "two"},
 	}
-	for i, tc := range tt {
+	for _, tc := range tt {
 		if tc.err.Error() != tc.exp {
-			t.Errorf("test case %d for errpair gave wrong result", i)
+			t.Error("errpair gave wrong result")
 		}
 	}
 	err := errpair(nil, nil)
@@ -324,16 +296,25 @@ func TestErrors(t *testing.T) {
 }
 
 func deauthorize(d doer) func() {
-	cli, ok := d.(*client)
-	if !ok {
-		return func() {}
+	warning := func() {
+		fmt.Println("warning: client no deauthorized")
 	}
+	var cli *http.Client
+
+	switch c := d.(type) {
+	case *client:
+		cli = &c.Client
+	case *http.Client:
+		cli = c
+	default:
+		return warning
+	}
+
 	au, ok := cli.Transport.(*auth)
 	if !ok {
-		return func() {}
+		return warning
 	}
 	token := au.token
-	// remove the token
 	au.token = ""
 	return func() {
 		au.token = token

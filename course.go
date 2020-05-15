@@ -128,19 +128,12 @@ type Course struct {
 }
 
 // Settings gets the course settings
-func (c *Course) Settings(opts ...Option) (*CourseSettings, error) {
-	res := struct {
-		*CourseSettings
-		*AuthError
-	}{nil, nil}
-	err := getjson(c.client, &res, fmt.Sprintf("/courses/%d/settings", c.ID), asParams(opts))
+func (c *Course) Settings(opts ...Option) (cs *CourseSettings, err error) {
+	err = getjson(c.client, cs, asParams(opts), "/courses/%d/settings", c.ID)
 	if err != nil {
 		return nil, err
 	}
-	if res.AuthError != nil {
-		return nil, res.AuthError
-	}
-	return res.CourseSettings, nil
+	return
 }
 
 // UpdateSettings will update a user's settings based on a given settings struct.
@@ -183,7 +176,7 @@ type CourseSettings struct {
 
 // Users will get a list of users in the course
 func (c *Course) Users(opts ...Option) (users []User, err error) {
-	return users, getarr(
+	return users, getjson(
 		c.client, &users,
 		asParams(opts),
 		"/courses/%d/users", c.ID,
@@ -192,7 +185,7 @@ func (c *Course) Users(opts ...Option) (users []User, err error) {
 
 // SearchUsers will search for a user in the course
 func (c *Course) SearchUsers(opts ...Option) (users []User, err error) {
-	return users, getarr(
+	return users, getjson(
 		c.client, &users,
 		asParams(opts),
 		"/courses/%d/search_users", c.ID,
@@ -201,15 +194,10 @@ func (c *Course) SearchUsers(opts ...Option) (users []User, err error) {
 
 // Activity returns a course's activity data
 func (c *Course) Activity() error {
-	res := struct {
-		*AuthError
-	}{nil}
-	err := getjson(c.client, &res, fmt.Sprintf("/courses/%d/analytics/activity", c.ID), nil)
+	var res interface{}
+	err := getjson(c.client, &res, nil, "/courses/%d/analytics/activity", c.ID)
 	if err != nil {
 		return err
-	}
-	if res.AuthError != nil {
-		return res.AuthError
 	}
 	return nil
 }
@@ -221,10 +209,13 @@ func (c *Course) Files(opts ...Option) <-chan *File {
 }
 
 // File will get a specific file id.
-func (c *Course) File(id int) (*File, error) {
+func (c *Course) File(id int, opts ...Option) (*File, error) {
 	f := &File{}
-	path := fmt.Sprintf("courses/%d/files/%d", c.ID, id)
-	return f, getjson(c.client, f, path, nil)
+	return f, getjson(
+		c.client, f,
+		asParams(opts),
+		"courses/%d/files/%d", c.ID, id,
+	)
 }
 
 // ListFiles returns a slice of files for the course.
@@ -251,7 +242,7 @@ func (c *Course) Folders(opts ...Option) <-chan *Folder {
 func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 	f := &Folder{}
 	path := fmt.Sprintf("courses/%d/folders/%d", c.ID, id)
-	return f, getjson(c.client, f, path, nil)
+	return f, getjson(c.client, f, asParams(opts), path)
 }
 
 // ListFolders returns a slice of folders for the course.
@@ -388,8 +379,8 @@ func getQuizzes(client doer, courseID int, opts []Option) ([]*Quiz, error) {
 	q := make([]*Quiz, 0)
 	err := getjson(
 		client, &q,
-		fmt.Sprintf("courses/%d/quizzes", courseID),
 		asParams(opts),
+		"courses/%d/quizzes", courseID,
 	)
 	return q, err
 }
@@ -397,7 +388,7 @@ func getQuizzes(client doer, courseID int, opts []Option) ([]*Quiz, error) {
 func getQuiz(client doer, course, quiz int, opts []Option) (*Quiz, error) {
 	q := &Quiz{}
 	err := getjson(
-		client, q, fmt.Sprintf("courses/%d/quizzes/%d", course, quiz), asParams(opts))
+		client, q, asParams(opts), "courses/%d/quizzes/%d", course, quiz)
 	return q, err
 }
 
@@ -454,14 +445,6 @@ type QuizPermissions struct {
 	ReadStatistics bool `json:"read_statistics"`
 	ReviewGrades   bool `json:"review_grades"`
 	Update         bool `json:"update"`
-}
-
-func (c *Course) filespath() string {
-	return fmt.Sprintf("courses/%d/files", c.ID)
-}
-
-func (c *Course) folderspath() string {
-	return fmt.Sprintf("courses/%d/folders", c.ID)
 }
 
 func (c *Course) filespager(params []Option) *paginated {
@@ -542,6 +525,12 @@ func onlyFiles(p *paginated, handle func(error, chan int)) <-chan *File {
 func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Folder {
 	results := make(chan *Folder)
 	quit := make(chan int, 1)
+	go func() {
+		// handle errors from the first request
+		if err := <-p.errs; err != nil {
+			handle(err, quit)
+		}
+	}()
 	ch := p.channel()
 	go func() {
 		defer close(results)

@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"fmt"
+	"time"
 )
 
 // Option is a key value pair used
@@ -13,7 +14,7 @@ type Option interface {
 
 // Opt creates a new option. Used for creating
 // a new Param interface.
-func Opt(key, val string) Option {
+func Opt(key string, val interface{}) Option {
 	return &option{key, val}
 }
 
@@ -23,6 +24,16 @@ func ArrayOpt(key string, vals ...string) Option {
 	return &arropt{
 		key:  fmt.Sprintf("%s[]", key),
 		vals: vals,
+	}
+}
+
+const dateFormat = time.RFC3339
+
+// DateOpt will return an Option with a correctly formatted date.
+func DateOpt(key string, date time.Time) Option {
+	return &option{
+		key: key,
+		val: date.Format(dateFormat),
 	}
 }
 
@@ -81,7 +92,8 @@ func (po *prefixedOption) Value() []string {
 }
 
 type option struct {
-	key, val string
+	key string
+	val interface{}
 }
 
 func (o *option) Name() string {
@@ -89,7 +101,7 @@ func (o *option) Name() string {
 }
 
 func (o *option) Value() []string {
-	return []string{o.val}
+	return []string{fmt.Sprintf("%v", o.val)}
 }
 
 type arropt struct {

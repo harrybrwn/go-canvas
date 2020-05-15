@@ -38,7 +38,7 @@ type User struct {
 // Settings will get the user's settings.
 func (u *User) Settings() (settings map[string]interface{}, err error) {
 	// TODO: find the settings json response and use a struct not a map
-	if err = getjson(u.client, &settings, fmt.Sprintf("/users/%d/settings", u.ID), nil); err != nil {
+	if err = getjson(u.client, &settings, nil, "/users/%d/settings", u.ID); err != nil {
 		return nil, err
 	}
 	errors, eok := settings["errors"]
@@ -49,9 +49,14 @@ func (u *User) Settings() (settings map[string]interface{}, err error) {
 	return settings, nil
 }
 
+// CalendarEvents gets the user's calendar events.
+func (u *User) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
+	return cal, getjson(u.client, &cal, asParams(opts), "/users/%d/calendar_events", u.ID)
+}
+
 // Bookmarks will get the user's bookmarks
 func (u *User) Bookmarks(opts ...Option) (bks []Bookmark, err error) {
-	return bks, getarr(
+	return bks, getjson(
 		u.client, &bks,
 		asParams(opts),
 		"users/%d/bookmarks", u.ID,
@@ -64,18 +69,8 @@ func (u *User) Courses(opts ...Option) ([]*Course, error) {
 }
 
 // Profile will make a call to get the user's profile data.
-func (u *User) Profile() (*UserProfile, error) {
-	res := struct {
-		*UserProfile
-		*AuthError
-	}{nil, nil}
-	if err := getjson(u.client, &res, fmt.Sprintf("/users/%d/profile", u.ID), nil); err != nil {
-		return nil, err
-	}
-	if res.AuthError != nil {
-		return nil, res.AuthError
-	}
-	return res.UserProfile, nil
+func (u *User) Profile() (p *UserProfile, err error) {
+	return p, getjson(u.client, p, nil, "/users/%d/profile", u.ID)
 }
 
 // UserProfile is a user's profile data.
@@ -99,7 +94,7 @@ type UserProfile struct {
 
 // GradedSubmissions gets the user's graded submissions.
 func (u *User) GradedSubmissions() (subs []*Submission, err error) {
-	return subs, getarr(u.client, &subs, nil, "/users/%d/graded_submissions", u.ID)
+	return subs, getjson(u.client, &subs, nil, "/users/%d/graded_submissions", u.ID)
 }
 
 // Submission is a submission type.
@@ -137,7 +132,7 @@ type Submission struct {
 
 // Avatars will get a list of the user's avatars.
 func (u *User) Avatars() (av []Avatar, err error) {
-	return av, getarr(u.client, &av, nil, "/users/%d/avatars", u.ID)
+	return av, getjson(u.client, &av, nil, "/users/%d/avatars", u.ID)
 }
 
 // Avatar is the avatar data for a user.
@@ -160,7 +155,7 @@ type UserColor struct {
 // Colors will return a map of the user's custom profile colors.
 func (u *User) Colors() (map[string]string, error) {
 	colors := make(map[string]map[string]string)
-	err := getjson(u.client, &colors, fmt.Sprintf("users/%d/colors", u.ID), nil)
+	err := getjson(u.client, &colors, nil, "users/%d/colors", u.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,19 +163,11 @@ func (u *User) Colors() (map[string]string, error) {
 }
 
 // Color will get a specific color from the user's profile.
-func (u *User) Color(asset string) (*UserColor, error) {
-	res := struct {
-		*UserColor
-		*AuthError
-	}{nil, nil}
-	err := getjson(u.client, &res, fmt.Sprintf("users/%d/colors/%s", u.ID, asset), nil)
-	if err != nil {
-		return nil, nil
+func (u *User) Color(asset string) (color *UserColor, err error) {
+	if err = getjson(u.client, color, nil, "users/%d/colors/%s", u.ID, asset); err != nil {
+		return nil, err
 	}
-	if res.AuthError != nil {
-		return nil, res.AuthError
-	}
-	return res.UserColor, nil
+	return color, nil
 }
 
 // SetColor will update the color of the given asset to as specific hex color.
