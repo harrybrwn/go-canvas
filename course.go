@@ -6,46 +6,6 @@ import (
 	"time"
 )
 
-// CourseOption is a string type that defines the available course options.
-type CourseOption string
-
-const (
-	// NeedsGradingCountOpt is a course option
-	NeedsGradingCountOpt CourseOption = "needs_grading_count"
-	// SyllabusBodyOpt is a course option
-	SyllabusBodyOpt CourseOption = "syllabus_body"
-	// PublicDescriptionOpt is a course option
-	PublicDescriptionOpt CourseOption = "public_description"
-	// TotalScoresOpt is a course option
-	TotalScoresOpt CourseOption = "total_scores"
-	// CurrentGradingPeriodScoresOpt is a course option
-	CurrentGradingPeriodScoresOpt CourseOption = "current_grading_period_scores"
-	// TermOpt is a course option
-	TermOpt CourseOption = "term"
-	// AccountOpt is a course option
-	AccountOpt CourseOption = "account"
-	// CourseProgressOpt is a course option
-	CourseProgressOpt CourseOption = "course_progress"
-	// SectionsOpt is a course option
-	SectionsOpt CourseOption = "sections"
-	// StorageQuotaUsedMBOpt is a course option
-	StorageQuotaUsedMBOpt CourseOption = "storage_quota_used_mb"
-	// TotalStudentsOpt is a course option
-	TotalStudentsOpt CourseOption = "total_students"
-	// PassbackStatusOpt is a course option
-	PassbackStatusOpt CourseOption = "passback_status"
-	// FavoritesOpt is a course option
-	FavoritesOpt CourseOption = "favorites"
-	// TeachersOpt is a course option
-	TeachersOpt CourseOption = "teachers"
-	// ObservedUsersOpt is a course option
-	ObservedUsersOpt CourseOption = "observed_users"
-	// CourseImageOpt is a course option
-	CourseImageOpt CourseOption = "course_image"
-	// ConcludedOpt is a course option
-	ConcludedOpt CourseOption = "concluded"
-)
-
 // Course represents a canvas course.
 type Course struct {
 	ID                   int         `json:"id"`
@@ -122,7 +82,6 @@ type Course struct {
 		} `json:"wiki_page"`
 	} `json:"blueprint_restrictions_by_object_type"`
 
-	// client       *client
 	client       doer
 	errorHandler func(error, chan int)
 }

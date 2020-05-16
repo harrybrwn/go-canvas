@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-// DefaultHost is the default url host for the canvas api.
-var DefaultHost = "canvas.instructure.com"
-
 type client struct {
 	http.Client
 }
@@ -20,12 +17,31 @@ type doer interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+func do(d doer, req *http.Request) (*http.Response, error) {
+	resp, err := d.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var e error
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return resp, err
+	case http.StatusNotFound, http.StatusUnauthorized:
+		e = &AuthError{}
+	case http.StatusBadRequest:
+		e = &Error{}
+	}
+	err = errpair(e, json.NewDecoder(resp.Body).Decode(&e))
+	return nil, errpair(err, resp.Body.Close())
+}
+
 func get(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	var q string
 	if vals != nil {
 		q = vals.Encode()
 	}
-	return c.Do(newreq("GET", endpoint, q))
+	return do(c, newreq("GET", endpoint, q))
 }
 
 func put(c doer, endpoint string, vals encoder) (*http.Response, error) {
@@ -33,7 +49,7 @@ func put(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	if vals != nil {
 		q = vals.Encode()
 	}
-	return c.Do(newreq("PUT", endpoint, q))
+	return do(c, newreq("PUT", endpoint, q))
 }
 
 func post(c doer, endpoint string, vals encoder) (*http.Response, error) {
@@ -41,7 +57,7 @@ func post(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	if vals != nil {
 		q = vals.Encode()
 	}
-	return c.Do(newreq("POST", endpoint, q))
+	return do(c, newreq("POST", endpoint, q))
 }
 
 func newreq(method, urlpath, query string) *http.Request {
@@ -61,17 +77,7 @@ func getjson(client doer, obj interface{}, vals encoder, path string, v ...inter
 		return err
 	}
 	defer resp.Body.Close()
-
-	var e error
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return json.NewDecoder(resp.Body).Decode(obj)
-	case http.StatusNotFound, http.StatusUnauthorized:
-		e = &AuthError{}
-	case http.StatusBadRequest:
-		e = &Error{}
-	}
-	return errpair(e, json.NewDecoder(resp.Body).Decode(&e))
+	return json.NewDecoder(resp.Body).Decode(obj)
 }
 
 func authorize(c *http.Client, token, host string) {
@@ -112,19 +118,17 @@ type Error struct {
 	Errors struct {
 		EndDate string `json:"end_date"`
 	} `json:"errors"`
-	// Errors  interface{} `json:"errors"`
 	Message string `json:"message"`
 }
 
 func (e *Error) Error() string {
-	var msg string
 	if e.Message != "" {
-		msg = e.Message
+		return e.Message
 	}
 	if e.Errors.EndDate != "" {
-		msg = e.Errors.EndDate
+		return fmt.Sprintf("end_date: %s", e.Errors.EndDate)
 	}
-	return msg
+	return "canvas error"
 }
 
 // AuthError is an authentication error response from canvas.

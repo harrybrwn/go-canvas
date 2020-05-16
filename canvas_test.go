@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,7 +21,8 @@ func testToken() string {
 }
 
 func init() {
-	SetToken(testToken())
+	t := testToken()
+	SetToken(t)
 }
 
 var (
@@ -32,8 +34,7 @@ var (
 func testUser() (*User, error) {
 	var err error
 	if testingUser == nil {
-		c := New(testToken())
-		testingUser, err = c.CurrentUser()
+		testingUser, err = CurrentUser()
 	}
 	return testingUser, err
 }
@@ -41,7 +42,7 @@ func testUser() (*User, error) {
 func testCourse() *Course {
 	if testingCourse == nil {
 		var err error
-		testingCourse, err = New(testToken()).GetCourse(2056049)
+		testingCourse, err = GetCourse(2056049)
 		if err != nil {
 			panic("could not get test course: " + err.Error())
 		}
@@ -59,6 +60,29 @@ func testCourses() ([]*Course, error) {
 }
 
 func Test(t *testing.T) {
+
+}
+
+func TestSetHost(t *testing.T) {
+	trans := defaultCanvas.client.Transport
+	auth, ok := trans.(*auth)
+	if !ok {
+		t.Fatalf("could not set a host for this transport: %T", trans)
+	}
+	host := auth.host
+
+	if err := SetHost("test.host"); err != nil {
+		t.Error(err)
+	}
+	if auth.host != "test.host" {
+		t.Error("did not set correct host")
+	}
+	defaultCanvas.client.Transport = http.DefaultTransport
+	if err := SetHost("test1.host"); err == nil {
+		t.Errorf("expected an error for setting host on %T", defaultCanvas.client.Transport)
+	}
+	defaultCanvas.client.Transport = auth
+	auth.host = host
 }
 
 func TestAnnouncements(t *testing.T) {
@@ -117,6 +141,15 @@ func TestUser(t *testing.T) {
 	color, err := u.Color(col)
 	is.NoErr(err)
 	is.Equal(color.HexCode, val)
+
+	user, err := GetUser(u.ID)
+	if err != nil {
+		t.Error(err)
+	}
+	is.Equal(user.Name, u.Name) // names should be the same
+	is.Equal(user.ID, u.ID)
+	is.Equal(user.Email, u.Email)
+	is.True(user.CreatedAt.Equal(u.CreatedAt))
 }
 
 func TestUser_Err(t *testing.T) {
@@ -260,6 +293,37 @@ func TestErrChan(t *testing.T) {
 	}
 }
 
+func TestBookmarks(t *testing.T) {
+	is := is.New(t)
+
+	c := testCourse()
+	err := CreateBookmark(&Bookmark{
+		Name: "test bookmark",
+		URL:  fmt.Sprintf("https://%s/courses/%d/assignments", DefaultHost, c.ID),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	bks, err := Bookmarks()
+	is.NoErr(err)
+	for _, b := range bks {
+		if b.Name != "test bookmark" {
+			t.Error("got the wrong bookmark")
+		}
+		is.NoErr(DeleteBookmark(&b))
+	}
+
+	defer deauthorize(defaultCanvas.client)()
+	err = CreateBookmark(&Bookmark{
+		Name: "test bookmark",
+		URL:  fmt.Sprintf("https://%s/courses/%d/assignments", DefaultHost, c.ID),
+	})
+	if err == nil {
+		t.Error("expected an error")
+	}
+}
+
 func TestErrPair(t *testing.T) {
 	tt := []struct {
 		err error
@@ -293,6 +357,13 @@ func TestErrors(t *testing.T) {
 	}
 	is.Equal(e.Error(), "one, two")
 	is.Equal(checkErrors([]errorMsg{}), "")
+
+	err := &Error{}
+	json.Unmarshal([]byte(`{"errors":{"end_date":"no"},"message":"error"}`), err)
+	is.Equal(err.Error(), "error")
+	err = &Error{}
+	json.Unmarshal([]byte(`{"errors":{"end_date":"no"}}`), err)
+	is.Equal(err.Error(), "end_date: no")
 }
 
 func deauthorize(d doer) func() {

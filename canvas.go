@@ -1,35 +1,24 @@
 package canvas
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 )
 
-// DefaultCanvas is the default canvas object
-var defaultCanvas *Canvas
+var (
+	// DefaultHost is the default url host for the canvas api.
+	DefaultHost = "canvas.instructure.com"
+
+	// DefaultCanvas is the default canvas object
+	defaultCanvas *Canvas
+)
 
 func init() {
 	token := os.Getenv("CANVAS_TOKEN")
 	defaultCanvas = New(token)
-}
-
-// New will create a Canvas struct from an api token.
-// New uses the default host.
-func New(token string) *Canvas {
-	return WithHost(token, DefaultHost)
-}
-
-// WithHost will create a canvas object that uses a
-// different hostname.
-func WithHost(token, host string) *Canvas {
-	c := &Canvas{client: &http.Client{}}
-	authorize(c.client, token, host)
-	return c
 }
 
 // SetToken will set the package level canvas object token.
@@ -45,6 +34,20 @@ func SetHost(host string) error {
 	}
 	auth.host = host
 	return nil
+}
+
+// New will create a Canvas struct from an api token.
+// New uses the default host.
+func New(token string) *Canvas {
+	return WithHost(token, DefaultHost)
+}
+
+// WithHost will create a canvas object that uses a
+// different hostname.
+func WithHost(token, host string) *Canvas {
+	c := &Canvas{client: &http.Client{}}
+	authorize(c.client, token, host)
+	return c
 }
 
 // Canvas is the main api controller.
@@ -77,20 +80,18 @@ func GetCourse(id int, opts ...Option) (*Course, error) {
 
 // ActiveCourses returns a list of only the courses that are
 // currently active
-func (c *Canvas) ActiveCourses(options ...string) ([]*Course, error) {
-	return getCourses(c.client, "/courses", &url.Values{
-		"enrollment_state": {"active"},
-		"include[]":        options,
-	})
+func (c *Canvas) ActiveCourses(opts ...Option) ([]*Course, error) {
+	p := params{"enrollment_state": {"active"}}
+	p.Add(opts...)
+	return getCourses(c.client, "/courses", p)
 }
 
 // CompletedCourses returns a list of only the courses that are
 // not currently active and have been completed
-func (c *Canvas) CompletedCourses(options ...string) ([]*Course, error) {
-	return getCourses(c.client, "/courses", &url.Values{
-		"enrollment_state": {"completed"},
-		"include[]":        options,
-	})
+func (c *Canvas) CompletedCourses(opts ...Option) ([]*Course, error) {
+	p := params{"enrollment_state": {"completed"}}
+	p.Add(opts...)
+	return getCourses(c.client, "/courses", p)
 }
 
 // GetUser will return a user object given that user's ID.
@@ -113,9 +114,14 @@ func CurrentUser(opts ...Option) (*User, error) {
 	return defaultCanvas.CurrentUser(opts...)
 }
 
-// CurrentUserTodo will get the current user's todo's.
-func (c *Canvas) CurrentUserTodo() error {
+// Todos will get the current user's todo's.
+func (c *Canvas) Todos() error {
 	panic("not implimented")
+}
+
+// Todos will get the current user's todo's.
+func Todos() error {
+	return defaultCanvas.Todos()
 }
 
 // CurrentAccount will get the current account.
@@ -130,15 +136,8 @@ func CurrentAccount() (a *Account, err error) {
 }
 
 // Accounts will list the accounts
-func (c *Canvas) Accounts(opts ...Option) (accounts []Account, err error) {
-	err = getjson(c.client, &accounts, asParams(opts), "/accounts")
-	if err != nil {
-		return nil, err
-	}
-	for i := range accounts {
-		accounts[i].cli = c.client
-	}
-	return
+func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
+	return getAccounts(c.client, "/accounts", opts)
 }
 
 // Accounts will list the accounts
@@ -147,15 +146,8 @@ func Accounts(opts ...Option) ([]Account, error) {
 }
 
 // CourseAccounts will make a call to the course accounts endpoint
-func (c *Canvas) CourseAccounts(opts ...Option) (acts []Account, err error) {
-	err = getjson(c.client, &acts, asParams(opts), "/course_accounts")
-	if err != nil {
-		return nil, err
-	}
-	for i := range acts {
-		acts[i].cli = c.client
-	}
-	return
+func (c *Canvas) CourseAccounts(opts ...Option) ([]Account, error) {
+	return getAccounts(c.client, "/course_accounts", opts)
 }
 
 // CourseAccounts will make a call to the course accounts endpoint
@@ -199,15 +191,8 @@ func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
 // Options: name, domain, latitude, longitude
 //
 // 	c.SearchAccouts(Opt("name", "My School Name"))
-func (c *Canvas) SearchAccounts(opts ...Option) (acts []Account, err error) {
-	err = getjson(c.client, &acts, asParams(opts), "/accounts/search")
-	if err != nil {
-		return nil, err
-	}
-	for i := range acts {
-		acts[i].cli = c.client
-	}
-	return
+func (c *Canvas) SearchAccounts(opts ...Option) ([]Account, error) {
+	return getAccounts(c.client, "accounts/search", opts)
 }
 
 // SearchAccounts will search for canvas accounts.
@@ -220,9 +205,9 @@ func SearchAccounts(opts ...Option) ([]Account, error) {
 
 // Announcements will get the announcements
 func (c *Canvas) Announcements(contextCodes []string, opts ...Option) (arr []DiscussionTopic, err error) {
-	params := asParams(opts)
-	params["context_codes"] = contextCodes
-	return arr, getjson(c.client, &arr, params, "/announcements")
+	p := params{"context_codes": contextCodes}
+	p.Add(opts...)
+	return arr, getjson(c.client, &arr, p, "/announcements")
 }
 
 // Announcements will get the announcements
@@ -339,6 +324,16 @@ func CreateBookmark(b *Bookmark) error {
 	return defaultCanvas.CreateBookmark(b)
 }
 
+// DeleteBookmark will delete a bookmark
+func (c *Canvas) DeleteBookmark(b *Bookmark) error {
+	return deleteBookmark(c.client, "self", b.ID)
+}
+
+// DeleteBookmark will delete a bookmark
+func DeleteBookmark(b *Bookmark) error {
+	return defaultCanvas.DeleteBookmark(b)
+}
+
 // Bookmark is a bookmark object.
 type Bookmark struct {
 	ID       int    `json:"id"`
@@ -373,16 +368,36 @@ func getCourses(c doer, path string, vals encoder) (crs []*Course, err error) {
 }
 
 func createBookmark(d doer, id interface{}, b *Bookmark) error {
-	resp, err := post(d, fmt.Sprintf("/users/%v/bookmarks", id), params{
+	p := params{
 		"name":     {b.Name},
-		"url":      {b.URL},
 		"position": {fmt.Sprintf("%d", b.Position)},
-		"data":     {},
-	})
+	}
+	if b.URL != "" {
+		p["url"] = []string{b.URL}
+	}
+	resp, err := post(d, fmt.Sprintf("/users/%v/bookmarks", id), p)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	e := &AuthError{}
-	return errpair(json.NewDecoder(resp.Body).Decode(e), e)
+	return err
+}
+
+func deleteBookmark(d doer, pathvar interface{}, id int) error {
+	req := newreq("DELETE", fmt.Sprintf("/users/%v/bookmarks/%d", pathvar, id), "")
+	if _, err := do(d, req); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getAccounts(d doer, path string, opts []Option) (accts []Account, err error) {
+	err = getjson(d, &accts, asParams(opts), path)
+	if err != nil {
+		return nil, err
+	}
+	for i := range accts {
+		accts[i].cli = d
+	}
+	return
 }

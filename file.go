@@ -46,13 +46,8 @@ func (f *File) Folder() (*Folder, error) {
 	if f.folder != nil && f.folder.ID == f.FolderID {
 		return f.folder, nil
 	}
-	resp, err := get(f.client, fmt.Sprintf("folders/%d", f.FolderID), nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 	f.folder = &Folder{client: f.client}
-	return f.folder, json.NewDecoder(resp.Body).Decode(f.folder)
+	return f.folder, getjson(f.client, f.folder, nil, "folders/%d", f.FolderID)
 }
 
 // Folder is a folder
@@ -91,13 +86,8 @@ func (f *Folder) Parent() (*Folder, error) {
 	if f.parent != nil {
 		return f.parent, nil
 	}
-	resp, err := get(f.client, fmt.Sprintf("folders/%d", f.ParentFolderID), nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 	f.parent = &Folder{client: f.client}
-	return f.parent, json.NewDecoder(resp.Body).Decode(f.parent)
+	return f.parent, getjson(f.client, f.parent, nil, "folders/%d", f.ParentFolderID)
 }
 
 // Files will return a channel that sends all of the files

@@ -38,15 +38,12 @@ type User struct {
 // Settings will get the user's settings.
 func (u *User) Settings() (settings map[string]interface{}, err error) {
 	// TODO: find the settings json response and use a struct not a map
-	if err = getjson(u.client, &settings, nil, "/users/%d/settings", u.ID); err != nil {
-		return nil, err
-	}
-	errors, eok := settings["errors"]
-	status, sok := settings["status"]
-	if eok || sok {
-		return nil, fmt.Errorf("%s: %v", status, errors)
-	}
-	return settings, nil
+	return settings, getjson(u.client, &settings, nil, "/users/%d/settings", u.ID)
+}
+
+// Courses will return the user's courses.
+func (u *User) Courses(opts ...Option) ([]*Course, error) {
+	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), asParams(opts))
 }
 
 // CalendarEvents gets the user's calendar events.
@@ -63,9 +60,14 @@ func (u *User) Bookmarks(opts ...Option) (bks []Bookmark, err error) {
 	)
 }
 
-// Courses will return the user's courses.
-func (u *User) Courses(opts ...Option) ([]*Course, error) {
-	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), asParams(opts))
+// CreateBookmark will create a bookmark
+func (u *User) CreateBookmark(b *Bookmark) error {
+	return createBookmark(u.client, u.ID, b)
+}
+
+// DeleteBookmark will delete a user's bookmark.
+func (u *User) DeleteBookmark(b *Bookmark) error {
+	return deleteBookmark(u.client, u.ID, b.ID)
 }
 
 // Profile will make a call to get the user's profile data.
@@ -164,10 +166,7 @@ func (u *User) Colors() (map[string]string, error) {
 
 // Color will get a specific color from the user's profile.
 func (u *User) Color(asset string) (color *UserColor, err error) {
-	if err = getjson(u.client, color, nil, "users/%d/colors/%s", u.ID, asset); err != nil {
-		return nil, err
-	}
-	return color, nil
+	return color, getjson(u.client, color, nil, "users/%d/colors/%s", u.ID, asset)
 }
 
 // SetColor will update the color of the given asset to as specific hex color.
