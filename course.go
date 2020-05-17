@@ -135,20 +135,24 @@ type CourseSettings struct {
 
 // Users will get a list of users in the course
 func (c *Course) Users(opts ...Option) (users []User, err error) {
-	return users, getjson(
-		c.client, &users,
-		asParams(opts),
-		"/courses/%d/users", c.ID,
-	)
+	return users, getjson(c.client, &users, asParams(opts), "/courses/%d/users", c.ID)
 }
 
 // SearchUsers will search for a user in the course
-func (c *Course) SearchUsers(opts ...Option) (users []User, err error) {
-	return users, getjson(
-		c.client, &users,
-		asParams(opts),
-		"/courses/%d/search_users", c.ID,
-	)
+func (c *Course) SearchUsers(term string, opts ...Option) (users []User, err error) {
+	p := params{"search_term": {term}}
+	p.Add(opts...)
+	err = getjson(c.client, &users, p, "/courses/%d/search_users", c.ID)
+	for i := range users {
+		users[i].client = c.client
+	}
+	return users, nil
+}
+
+// User gets a specific user.
+func (c *Course) User(id int, opts ...Option) (*User, error) {
+	u := &User{client: c.client}
+	return u, getjson(c.client, u, asParams(opts), "")
 }
 
 // Activity returns a course's activity data
@@ -353,11 +357,11 @@ func getQuiz(client doer, course, quiz int, opts []Option) (*Quiz, error) {
 
 // Quiz is a quiz json response.
 type Quiz struct {
-	ID       int         `json:"id"`
-	Title    string      `json:"title"`
-	DueAt    string      `json:"due_at"`
-	LockAt   interface{} `json:"lock_at"`
-	UnlockAt string      `json:"unlock_at"`
+	ID       int       `json:"id"`
+	Title    string    `json:"title"`
+	DueAt    string    `json:"due_at"`
+	LockAt   time.Time `json:"lock_at"`
+	UnlockAt string    `json:"unlock_at"`
 
 	HTMLURL                       string          `json:"html_url"`
 	MobileURL                     string          `json:"mobile_url"`

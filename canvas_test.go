@@ -60,7 +60,6 @@ func testCourses() ([]*Course, error) {
 }
 
 func Test(t *testing.T) {
-
 }
 
 func TestSetHost(t *testing.T) {
@@ -185,9 +184,8 @@ func TestUser_Err(t *testing.T) {
 
 func TestCourse_Files(t *testing.T) {
 	is := is.New(t)
-	courses, err := testCourses()
-	is.NoErr(err)
-	c := courses[0]
+	c := testCourse()
+
 	c.SetErrorHandler(func(e error, quit chan int) {
 		t.Fatal(e)
 		quit <- 1

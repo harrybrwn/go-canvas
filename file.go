@@ -99,7 +99,7 @@ func (f *Folder) Files() <-chan *File {
 		filesInitFunc(f.client),
 		nil,
 	)
-	return onlyFiles(pages, defaultErrorHandler)
+	return onlyFiles(pages, ConcurrentErrorHandler)
 }
 
 // Folders will return a channel that sends all of the sub-folders.
@@ -110,7 +110,7 @@ func (f *Folder) Folders() <-chan *Folder {
 		filesInitFunc(f.client),
 		nil,
 	)
-	return onlyFolders(pages, defaultErrorHandler)
+	return onlyFolders(pages, ConcurrentErrorHandler)
 }
 
 func filesInitFunc(c doer) pageInitFunction {

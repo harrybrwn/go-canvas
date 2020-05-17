@@ -12,6 +12,10 @@ var (
 	// DefaultHost is the default url host for the canvas api.
 	DefaultHost = "canvas.instructure.com"
 
+	// ConcurrentErrorHandler is the error handling callback for
+	// handling errors in tricky goroutines.
+	ConcurrentErrorHandler func(error, chan int) = defaultErrorHandler
+
 	// DefaultCanvas is the default canvas object
 	defaultCanvas *Canvas
 )
@@ -86,12 +90,24 @@ func (c *Canvas) ActiveCourses(opts ...Option) ([]*Course, error) {
 	return getCourses(c.client, "/courses", p)
 }
 
+// ActiveCourses returns a list of only the courses that are
+// currently active
+func ActiveCourses(opts ...Option) ([]*Course, error) {
+	return defaultCanvas.ActiveCourses(opts...)
+}
+
 // CompletedCourses returns a list of only the courses that are
 // not currently active and have been completed
 func (c *Canvas) CompletedCourses(opts ...Option) ([]*Course, error) {
 	p := params{"enrollment_state": {"completed"}}
 	p.Add(opts...)
 	return getCourses(c.client, "/courses", p)
+}
+
+// CompletedCourses returns a list of only the courses that are
+// not currently active and have been completed
+func CompletedCourses(opts ...Option) ([]*Course, error) {
+	return defaultCanvas.CompletedCourses(opts...)
 }
 
 // GetUser will return a user object given that user's ID.
@@ -304,6 +320,36 @@ type CalendarEvent struct {
 	Group                      interface{} `json:"group"`
 }
 
+// Conversations returns a list of conversations
+func (c *Canvas) Conversations(opts ...Option) (conversations []Conversation, err error) {
+	return conversations, getjson(c.client, &conversations, asParams(opts), "/conversations")
+}
+
+// Conversations returns a list of conversations
+func Conversations(opts ...Option) ([]Conversation, error) {
+	return defaultCanvas.Conversations(opts...)
+}
+
+// Conversation is a conversation.
+type Conversation struct {
+	ID               int         `json:"id"`
+	Subject          string      `json:"subject"`
+	WorkflowState    string      `json:"workflow_state"`
+	LastMessage      string      `json:"last_message"`
+	StartAt          time.Time   `json:"start_at"`
+	MessageCount     int         `json:"message_count"`
+	Subscribed       bool        `json:"subscribed"`
+	Private          bool        `json:"private"`
+	Starred          bool        `json:"starred"`
+	Properties       interface{} `json:"properties"`
+	Audience         interface{} `json:"audience"`
+	AudienceContexts interface{} `json:"audience_contexts"`
+	AvatarURL        string      `json:"avatar_url"`
+	Participants     interface{} `json:"participants"`
+	Visible          bool        `json:"visible"`
+	ContextName      string      `json:"context_name"`
+}
+
 // Bookmarks will get the current user's bookmarks.
 func (c *Canvas) Bookmarks(opts ...Option) (b []Bookmark, err error) {
 	return b, getjson(c.client, &b, asParams(opts), "/users/self/bookmarks")
@@ -362,7 +408,7 @@ func getCourses(c doer, path string, vals encoder) (crs []*Course, err error) {
 	}
 	for i := range crs {
 		crs[i].client = c
-		crs[i].errorHandler = defaultErrorHandler
+		crs[i].errorHandler = ConcurrentErrorHandler
 	}
 	return crs, nil
 }

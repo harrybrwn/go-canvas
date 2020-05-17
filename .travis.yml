@@ -1,0 +1,20 @@
+language: go
+
+go:
+  - 1.13
+  - 1.14.2
+
+env:
+os:
+  - linux
+  - osx
+  - windows
+
+script:
+  - go test -v -cover
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+
+notifications:
+  email: false

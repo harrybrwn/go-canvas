@@ -53,11 +53,7 @@ func (u *User) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
 
 // Bookmarks will get the user's bookmarks
 func (u *User) Bookmarks(opts ...Option) (bks []Bookmark, err error) {
-	return bks, getjson(
-		u.client, &bks,
-		asParams(opts),
-		"users/%d/bookmarks", u.ID,
-	)
+	return bks, getjson(u.client, &bks, asParams(opts), "users/%d/bookmarks", u.ID)
 }
 
 // CreateBookmark will create a bookmark
