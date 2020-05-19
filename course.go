@@ -152,17 +152,13 @@ func (c *Course) SearchUsers(term string, opts ...Option) (users []User, err err
 // User gets a specific user.
 func (c *Course) User(id int, opts ...Option) (*User, error) {
 	u := &User{client: c.client}
-	return u, getjson(c.client, u, asParams(opts), "")
+	return u, getjson(c.client, u, asParams(opts), "/courses/%d/users/%d", c.ID, id)
 }
 
 // Activity returns a course's activity data
-func (c *Course) Activity() error {
+func (c *Course) Activity() (interface{}, error) {
 	var res interface{}
-	err := getjson(c.client, &res, nil, "/courses/%d/analytics/activity", c.ID)
-	if err != nil {
-		return err
-	}
-	return nil
+	return res, getjson(c.client, &res, nil, "/courses/%d/analytics/activity", c.ID)
 }
 
 // Files returns a channel of all the course's files

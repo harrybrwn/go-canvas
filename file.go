@@ -41,13 +41,14 @@ type File struct {
 	folder *Folder
 }
 
-// Folder will get the folder that the file is a part of.
-func (f *File) Folder() (*Folder, error) {
+// ParentFolder will get the folder that the file is a part of.
+func (f *File) ParentFolder() (*Folder, error) {
 	if f.folder != nil && f.folder.ID == f.FolderID {
 		return f.folder, nil
 	}
 	f.folder = &Folder{client: f.client}
-	return f.folder, getjson(f.client, f.folder, nil, "folders/%d", f.FolderID)
+	err := getjson(f.client, f.folder, nil, "folders/%d", f.FolderID)
+	return f.folder, err
 }
 
 // Folder is a folder
@@ -81,8 +82,8 @@ type Folder struct {
 	parent *Folder
 }
 
-// Parent will get the folder's parent folder.
-func (f *Folder) Parent() (*Folder, error) {
+// ParentFolder will get the folder's parent folder.
+func (f *Folder) ParentFolder() (*Folder, error) {
 	if f.parent != nil {
 		return f.parent, nil
 	}

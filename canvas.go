@@ -16,6 +16,9 @@ var (
 	// handling errors in tricky goroutines.
 	ConcurrentErrorHandler func(error, chan int) = defaultErrorHandler
 
+	// DefaultUserAgent is the default user agent used to make requests.
+	DefaultUserAgent = "go-canvas"
+
 	// DefaultCanvas is the default canvas object
 	defaultCanvas *Canvas
 )

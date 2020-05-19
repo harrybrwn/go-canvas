@@ -2,12 +2,28 @@ package canvas
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 )
+
+// ErrRateLimitExceeded is returned when the api rate limit has been reached.
+var ErrRateLimitExceeded = errors.New("403 Forbidden (Rate Limit Exceeded)")
+
+// IsRateLimit returns true if the error
+// given is a rate limit error.
+func IsRateLimit(e error) bool {
+	if e == nil {
+		return false
+	}
+	if e == ErrRateLimitExceeded {
+		return true
+	}
+	return strings.Contains(e.Error(), "Rate Limit Exceeded")
+}
 
 type client struct {
 	http.Client
@@ -31,6 +47,11 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 		e = &AuthError{}
 	case http.StatusBadRequest:
 		e = &Error{}
+	case http.StatusForbidden:
+		resp.Body.Close()
+		rem := resp.Header.Get("X-Rate-Limit-Remaining")
+		return nil, fmt.Errorf(
+			"%s; remaining: %s", ErrRateLimitExceeded.Error(), rem)
 	}
 	err = errpair(e, json.NewDecoder(resp.Body).Decode(&e))
 	return nil, errpair(err, resp.Body.Close())
@@ -96,6 +117,7 @@ type auth struct {
 
 func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.token))
+	req.Header.Set("User-Agent", DefaultUserAgent)
 	req.Host = a.host
 	req.URL.Scheme = "https"
 	req.URL.Host = a.host

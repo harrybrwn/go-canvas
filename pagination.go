@@ -27,6 +27,7 @@ func newPaginatedList(
 		path:    path,
 		query:   asParams(parameters),
 		init:    init,
+		perpage: 10,
 		wg:      new(sync.WaitGroup),
 		objects: make(chan interface{}),
 		errs:    make(chan error),
@@ -39,6 +40,7 @@ type paginated struct {
 	do    doer
 
 	n       int
+	perpage int
 	objects chan interface{}
 	errs    chan error
 
@@ -48,7 +50,7 @@ type paginated struct {
 
 // returns <number of pages>, <first response
 func (p *paginated) firstReq() (int, *http.Response, error) {
-	q := params{"page": {"1"}, "per_page": {"10"}}
+	q := params{"page": {"1"}, "per_page": {fmt.Sprintf("%d", p.perpage)}}
 	q.Join(p.query)
 	resp, err := get(p.do, p.path, q)
 	if err != nil {
@@ -78,6 +80,7 @@ func (p *paginated) channel() <-chan interface{} {
 
 	go func() {
 		defer resp.Body.Close()
+		defer p.wg.Done()
 		list, err := p.init(1, resp.Body)
 		if err != nil {
 			p.errs <- err
@@ -86,11 +89,13 @@ func (p *paginated) channel() <-chan interface{} {
 		for _, o := range list {
 			p.objects <- o
 		}
-		p.wg.Done()
 	}()
 	for page := 2; page <= n; page++ {
 		go func(page int64, path string) {
-			q := params{"page": {strconv.FormatInt(page, 10)}, "per_page": {"10"}}
+			defer p.wg.Done()
+			q := params{
+				"page":     {strconv.FormatInt(page, 10)},
+				"per_page": {fmt.Sprintf("%d", p.perpage)}}
 			q.Join(p.query)
 			resp, err := get(p.do, path, q)
 			if err != nil {
@@ -106,7 +111,6 @@ func (p *paginated) channel() <-chan interface{} {
 			for _, o := range obs {
 				p.objects <- o
 			}
-			p.wg.Done()
 		}(int64(page), p.path)
 	}
 	go func() {
@@ -119,7 +123,7 @@ func (p *paginated) channel() <-chan interface{} {
 
 func (p *paginated) collect() ([]interface{}, error) {
 	p.channel()
-	collection := make([]interface{}, 0, p.n*10)
+	collection := make([]interface{}, 0, p.n*p.perpage)
 	for {
 		select {
 		case err := <-p.errs:

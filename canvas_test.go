@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/matryer/is"
 )
 
 func testToken() string {
-	// tok := os.Getenv("CANVAS_TOKEN")
 	tok := os.Getenv("CANVAS_TEST_TOKEN")
 	if tok == "" {
 		panic("no testing token")
@@ -26,6 +26,7 @@ func init() {
 }
 
 var (
+	mu             sync.Mutex
 	testingUser    *User
 	testingCourses []*Course
 	testingCourse  *Course
@@ -365,6 +366,8 @@ func TestErrors(t *testing.T) {
 }
 
 func deauthorize(d doer) func() {
+	mu.Lock()
+	defer mu.Unlock()
 	warning := func() {
 		fmt.Println("warning: client no deauthorized")
 	}
@@ -386,6 +389,8 @@ func deauthorize(d doer) func() {
 	token := au.token
 	au.token = ""
 	return func() {
+		mu.Lock()
 		au.token = token
+		mu.Unlock()
 	}
 }
