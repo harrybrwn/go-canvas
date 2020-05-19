@@ -178,8 +178,6 @@ func TestUser_Err(t *testing.T) {
 
 	err = u.SetColor(col, "#FFFFFF")
 	is.True(err != nil)
-	// _, ok := err.(*AuthError)
-	// is.True(ok)
 }
 
 func TestCourse_Files(t *testing.T) {
@@ -271,11 +269,89 @@ func TestCourseFiles_Err(t *testing.T) {
 	c.errorHandler = defaultErrorHandler
 }
 
+func TestCourse_Settings(t *testing.T) {
+	c := testCourse()
+	settings, err := c.Settings()
+	if err != nil {
+		t.Error(err)
+	}
+	hidefinalgrades := settings.HideFinalGrades
+	settings.HideFinalGrades = !hidefinalgrades
+	settings, err = c.UpdateSettings(settings)
+	if err != nil {
+		t.Error(err)
+	}
+	if settings.HideFinalGrades == hidefinalgrades {
+		t.Error("hide final grades should be the opposite")
+	}
+}
+
+func TestFilesFolders(t *testing.T) {
+	c := testCourse()
+	folder, err := c.Folder(19926068)
+	if err != nil {
+		t.Error(err)
+	}
+	parent, err := folder.ParentFolder()
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = parent.ParentFolder()
+	if err == nil {
+		t.Error("the root folder has no parent")
+	}
+	f, err := folder.ParentFolder()
+	if f != parent {
+		t.Error("should be the same pointer")
+	}
+
+	file, err := parent.File(95954272)
+	if err != nil {
+		t.Error(err)
+	}
+	folder, err = file.ParentFolder()
+	if err != nil {
+		t.Error(err)
+	}
+	f, _ = file.ParentFolder()
+	if f != folder {
+		t.Error("pointers should be the same")
+	}
+
+	files := c.Files(ContentType("application/x-yaml", "text/markdown"))
+	for file = range files {
+		if file.ContentType != "application/x-yaml" && file.ContentType != "text/markdown" {
+			t.Error("got wrong content type")
+		}
+	}
+}
+
+func TestCourse_Settings_Err(t *testing.T) {
+	c := testCourse()
+	defer deauthorize(c.client)()
+	_, err := c.UpdateSettings(nil)
+	if err == nil {
+		t.Error("expected an error")
+	}
+}
+
 func TestAccount(t *testing.T) {
 	is := is.New(t)
 	c := New(testToken())
 	_, err := c.SearchAccounts(Opt("name", "UC Berkeley"))
 	is.NoErr(err)
+
+	as, err := Accounts()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(as)
+
+	a, err := CurrentAccount()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(a)
 }
 
 func TestErrChan(t *testing.T) {
@@ -342,6 +418,8 @@ func TestErrors(t *testing.T) {
 	err = &Error{}
 	json.Unmarshal([]byte(`{"errors":{"end_date":"no"}}`), err)
 	is.Equal(err.Error(), "end_date: no")
+	is.True(IsRateLimit(ErrRateLimitExceeded))
+	is.True(!IsRateLimit(nil))
 }
 
 func deauthorize(d doer) func() {

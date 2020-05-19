@@ -90,22 +90,17 @@ type Course struct {
 
 // Settings gets the course settings
 func (c *Course) Settings(opts ...Option) (cs *CourseSettings, err error) {
-	err = getjson(c.client, cs, asParams(opts), "/courses/%d/settings", c.ID)
-	if err != nil {
-		return nil, err
-	}
-	return
+	cs = &CourseSettings{}
+	return cs, getjson(c.client, cs, asParams(opts), "/courses/%d/settings", c.ID)
 }
 
-// UpdateSettings will update a user's settings based on a given settings struct.
-func (c *Course) UpdateSettings(settings *CourseSettings) error {
-	raw, err := json.Marshal(settings)
-	if err != nil {
-		return err
-	}
+// UpdateSettings will update a user's settings based on a given settings struct and
+// will return the updated settings struct.
+func (c *Course) UpdateSettings(settings *CourseSettings) (*CourseSettings, error) {
 	m := make(map[string]interface{})
-	if err = json.Unmarshal(raw, &m); err != nil {
-		return err
+	raw, err := json.Marshal(settings)
+	if err = errs.Pair(err, json.Unmarshal(raw, &m)); err != nil {
+		return nil, err
 	}
 
 	vals := make(params)
@@ -114,11 +109,11 @@ func (c *Course) UpdateSettings(settings *CourseSettings) error {
 	}
 	resp, err := put(c.client, fmt.Sprintf("/courses/%d/settings", c.ID), vals)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	e := &AuthError{}
-	return errs.Pair(e, json.NewDecoder(resp.Body).Decode(e))
+	s := CourseSettings{}
+	return &s, json.NewDecoder(resp.Body).Decode(&s)
 }
 
 // CourseSettings is a json struct for a course's settings.
@@ -171,7 +166,7 @@ func (c *Course) Files(opts ...Option) <-chan *File {
 
 // File will get a specific file id.
 func (c *Course) File(id int, opts ...Option) (*File, error) {
-	f := &File{}
+	f := &File{client: c.client}
 	return f, getjson(
 		c.client, f,
 		asParams(opts),
@@ -201,7 +196,7 @@ func (c *Course) Folders(opts ...Option) <-chan *Folder {
 
 // Folder will the a folder from the course given a folder id.
 func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
-	f := &Folder{}
+	f := &Folder{client: c.client}
 	path := fmt.Sprintf("courses/%d/folders/%d", c.ID, id)
 	return f, getjson(c.client, f, asParams(opts), path)
 }

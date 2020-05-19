@@ -4,10 +4,6 @@ import (
 	"net/url"
 )
 
-func makeparams(opts ...Option) params {
-	return asParams(opts)
-}
-
 func asParams(opts []Option) params {
 	p := params{}
 	for _, o := range opts {
