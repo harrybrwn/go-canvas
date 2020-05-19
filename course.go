@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/harrybrwn/errs"
 )
 
 // Course represents a canvas course.
@@ -116,7 +118,7 @@ func (c *Course) UpdateSettings(settings *CourseSettings) error {
 	}
 	defer resp.Body.Close()
 	e := &AuthError{}
-	return errpair(e, json.NewDecoder(resp.Body).Decode(e))
+	return errs.Pair(e, json.NewDecoder(resp.Body).Decode(e))
 }
 
 // CourseSettings is a json struct for a course's settings.

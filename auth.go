@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"github.com/harrybrwn/errs"
 )
 
 // ErrRateLimitExceeded is returned when the api rate limit has been reached.
@@ -43,18 +45,15 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return resp, err
+	case http.StatusForbidden:
+		resp.Body.Close()
+		return nil, ErrRateLimitExceeded
 	case http.StatusNotFound, http.StatusUnauthorized:
 		e = &AuthError{}
 	case http.StatusBadRequest:
 		e = &Error{}
-	case http.StatusForbidden:
-		resp.Body.Close()
-		rem := resp.Header.Get("X-Rate-Limit-Remaining")
-		return nil, fmt.Errorf(
-			"%s; remaining: %s", ErrRateLimitExceeded.Error(), rem)
 	}
-	err = errpair(e, json.NewDecoder(resp.Body).Decode(&e))
-	return nil, errpair(err, resp.Body.Close())
+	return nil, errs.Chain(e, json.NewDecoder(resp.Body).Decode(&e), resp.Body.Close())
 }
 
 func get(c doer, endpoint string, vals encoder) (*http.Response, error) {

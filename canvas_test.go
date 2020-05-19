@@ -2,7 +2,6 @@ package canvas
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -179,8 +178,8 @@ func TestUser_Err(t *testing.T) {
 
 	err = u.SetColor(col, "#FFFFFF")
 	is.True(err != nil)
-	_, ok := err.(*AuthError)
-	is.True(ok)
+	// _, ok := err.(*AuthError)
+	// is.True(ok)
 }
 
 func TestCourse_Files(t *testing.T) {
@@ -320,26 +319,6 @@ func TestBookmarks(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("expected an error")
-	}
-}
-
-func TestErrPair(t *testing.T) {
-	tt := []struct {
-		err error
-		exp string
-	}{
-		{errpair(errors.New("one"), errors.New("two")), "one, two"},
-		{errpair(errors.New("one"), nil), "one"},
-		{errpair(nil, errors.New("two")), "two"},
-	}
-	for _, tc := range tt {
-		if tc.err.Error() != tc.exp {
-			t.Error("errpair gave wrong result")
-		}
-	}
-	err := errpair(nil, nil)
-	if err != nil {
-		t.Error("a pair of nil errors should result in one nil error")
 	}
 }
 
