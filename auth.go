@@ -18,13 +18,10 @@ var ErrRateLimitExceeded = errors.New("403 Forbidden (Rate Limit Exceeded)")
 // IsRateLimit returns true if the error
 // given is a rate limit error.
 func IsRateLimit(e error) bool {
-	if e == nil {
-		return false
-	}
 	if e == ErrRateLimitExceeded {
 		return true
 	}
-	return strings.Contains(e.Error(), "Rate Limit Exceeded")
+	return false
 }
 
 type client struct {
@@ -77,15 +74,31 @@ func post(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	if vals != nil {
 		q = vals.Encode()
 	}
+
 	return do(c, newreq("POST", endpoint, q))
 }
 
 func newreq(method, urlpath, query string) *http.Request {
+	return newV1Req(method, urlpath, query)
+}
+
+func newV1Req(method, urlpath, query string) *http.Request {
 	return &http.Request{
 		Method: method,
 		Proto:  "HTTP/1.1",
 		URL: &url.URL{
 			Path:     path.Join("/api/v1", urlpath),
+			RawQuery: query,
+		},
+	}
+}
+
+func newLtiReq(method, urlpath, query string) *http.Request {
+	return &http.Request{
+		Method: method,
+		Proto:  "HTTP/1.1",
+		URL: &url.URL{
+			Path:     path.Join("/api/lti", urlpath),
 			RawQuery: query,
 		},
 	}
@@ -121,6 +134,27 @@ func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Scheme = "https"
 	req.URL.Host = a.host
 	return a.rt.RoundTrip(req)
+}
+
+func newLTIClient(d doer) *ltiClient {
+	switch c := d.(type) {
+	case *http.Client:
+		return &ltiClient{client: *c}
+	case *client:
+		return &ltiClient{client: c.Client}
+	case *ltiClient:
+		return &ltiClient{client: c.client}
+	default:
+		panic("unknown doer type")
+	}
+}
+
+type ltiClient struct {
+	client http.Client
+}
+
+func (lti *ltiClient) Do(r *http.Request) (*http.Response, error) {
+	return lti.client.Do(r)
 }
 
 func checkErrors(errs []errorMsg) string {

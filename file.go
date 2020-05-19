@@ -91,14 +91,18 @@ func (f *Folder) ParentFolder() (*Folder, error) {
 	return f.parent, getjson(f.client, f.parent, nil, "folders/%d", f.ParentFolderID)
 }
 
+// File gets a file by id.
+func (f *Folder) File(id int, opts ...Option) (*File, error) {
+	file := &File{client: f.client}
+	return file, getjson(f.client, file, asParams(opts), "files/%d", id)
+}
+
 // Files will return a channel that sends all of the files
 // in the folder.
 func (f *Folder) Files() <-chan *File {
 	pages := newPaginatedList(
-		f.client,
-		fmt.Sprintf("folders/%d/files", f.ID),
-		filesInitFunc(f.client),
-		nil,
+		f.client, fmt.Sprintf("folders/%d/files", f.ID),
+		filesInitFunc(f.client), nil,
 	)
 	return onlyFiles(pages, ConcurrentErrorHandler)
 }
@@ -106,10 +110,8 @@ func (f *Folder) Files() <-chan *File {
 // Folders will return a channel that sends all of the sub-folders.
 func (f *Folder) Folders() <-chan *Folder {
 	pages := newPaginatedList(
-		f.client,
-		fmt.Sprintf("folders/%d/folders", f.ID),
-		filesInitFunc(f.client),
-		nil,
+		f.client, fmt.Sprintf("folders/%d/folders", f.ID),
+		filesInitFunc(f.client), nil,
 	)
 	return onlyFolders(pages, ConcurrentErrorHandler)
 }

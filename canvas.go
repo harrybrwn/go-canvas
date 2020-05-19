@@ -35,12 +35,7 @@ func SetToken(token string) {
 
 // SetHost will set the package level host.
 func SetHost(host string) error {
-	auth, ok := defaultCanvas.client.Transport.(*auth)
-	if !ok {
-		return errors.New("could not set canvas host")
-	}
-	auth.host = host
-	return nil
+	return defaultCanvas.SetHost(host)
 }
 
 // New will create a Canvas struct from an api token.
@@ -60,6 +55,16 @@ func WithHost(token, host string) *Canvas {
 // Canvas is the main api controller.
 type Canvas struct {
 	client *http.Client
+}
+
+// SetHost will set the host for the canvas requestor.
+func (c *Canvas) SetHost(host string) error {
+	auth, ok := c.client.Transport.(*auth)
+	if !ok {
+		return errors.New("could not set canvas host")
+	}
+	auth.host = host
+	return nil
 }
 
 // Courses lists all of the courses associated
@@ -145,7 +150,7 @@ func Todos() error {
 
 // CurrentAccount will get the current account.
 func (c *Canvas) CurrentAccount() (a *Account, err error) {
-	a.cli = c.client
+	a = &Account{cli: c.client}
 	return a, getjson(c.client, a, nil, "/accounts/self")
 }
 

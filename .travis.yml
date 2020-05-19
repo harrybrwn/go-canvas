@@ -1,20 +1,24 @@
 language: go
 
 go:
-  - 1.13
-  - 1.14.2
+- 1.13
+- 1.14.2
 
 env:
+  global:
+  - secure: qAYhqwDzeLvw6mzQTRO2OUGuRvwURRtUFCrjW/j1z5DI9mOCWI/59ffOW4+WeS+5ygSZ3k3C3g3jXldw7qimSEx4KZkbOe6oIpShWSHjjma2VbFc7SENxGmp/5ZK8g8UieHflfTNPGAHV8XTN+ZNt22JkDaB5Feq662Wl4aTog3p89VMDZz+a9V2yFXYhR0inWpN8yO0Wn65KkuSvFvZmV+n3RjN4NTk4XmAXUVN3K9I9UFUHwypUppD9lN6pN73fwbKELOh2kpRP5DZDorGc2kSk71Mekv3UtbjpJRyWiuzBOu+7VGZJUHQeeSPE1mnDFpMxjMBNW0emCut/sBoQyRiJMAPlJTOciKUv95hGGFMf3ay44wv+dmx7JED4ZiTyvq+oZWFosQ2dohWAS3f6YJLGfIAIiCSxhbwqJ1+ZyU1NyTvfVu48nPrfHx5/Fkx5GQ1mPb3LdOsdORLg7zg6QZm6RYfLizxXqinwgnmyXWZDu30hePjGu4iav2NluAS4P42WF6XesWtJI4T/8KTf7vtOe/U8tZYhRC7Fwz23Zfa1Bg7IucYCLt7f55SNDR40kBab+tgrcuOfXKW4L3oRgsy0+OUZ8TJZOEtQUC7QB8OgJNJecIr135eQ8xbSdBcU3BoXqS8/OTVsvgFRYMUoNRXED2CWppHaFa0l6wfcmk=
+  - secure: g1VxDgFxvUHqJ8F2+UeGpBoM6ijhjgSgDXdRyujr+9wvcz7YaNtcFvWJ6HtpSSDDau3U6J44uT3Um8Np9pz48oeXehk8bZhEkcr3e2FFIBrknn+Q9f9vSoGf63vN+aEXl5yI49KJ4s+pfSjcjLt4LmMYmgd1wteY44NJXelh6lEzn5LjWSzUUm8h/7kAzbetrdnbIw4y+sHrIcXsM0bZBqDtdHq5TGjPv6ieisuM5lipk2L1vHjpHNRqOxjHsu0dG8itEr+Ol+s7q000UCl+ATXunfUxIkT2IUSQPjG4eI6wq2fUHW/OES8hsCOKN9YZZNNX8Fa5+antNxeBzn2VO8aUWFmMmE6vIq5SQAo+dRFHggTEjvm7szAubWMDbHH/vKS3BJaADYr4ymoq7MbzPCcjtHH6llLWSnEs23G+1BMfDiAIzhSZXE5czPHImbpPBSLXcPBSMKMf7svADsfYpy2ZJLZN3SXwiwBdyrZc8fvz7U/K2coGmV+avnjKW0OAVQmYzO6gMpPBJdeN63q82JjutJT05ry4RFXH5+8MK03zE2CJVKngm8jrzmTju1cbgJiR0b0+oc7KFxVP3wyG6dQUCt/46uV729bqiiVfM7ulswFY43Jd/TaigSAQV4ziQZobkFwpEuMdMo44mWOxxj46S08T2YcnQcOC/cw2pRY=
+
 os:
-  - linux
-  - osx
-  - windows
+- linux
+- osx
+- windows
 
 script:
-  - go test -v -cover
+- go test -v -cover
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash)
+- bash <(curl -s https://codecov.io/bash)
 
 notifications:
   email: false
