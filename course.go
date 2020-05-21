@@ -3,6 +3,7 @@ package canvas
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/harrybrwn/errs"
@@ -137,13 +138,32 @@ func (c *Course) Users(opts ...Option) (users []User, err error) {
 
 // SearchUsers will search for a user in the course
 func (c *Course) SearchUsers(term string, opts ...Option) (users []User, err error) {
-	p := params{"search_term": {term}}
-	p.Add(opts...)
-	err = getjson(c.client, &users, p, "/courses/%d/search_users", c.ID)
-	for i := range users {
-		users[i].client = c.client
+	opts = append(opts, Opt("search_term", term))
+	ch := make(chan User)
+	errs := newPaginatedList(
+		c.client, fmt.Sprintf("/courses/%d/search_users", c.ID),
+		func(r io.Reader) error {
+			list := make([]User, 0)
+			err := json.NewDecoder(r).Decode(&list)
+			if err != nil {
+				return err
+			}
+			for _, u := range list {
+				u.client = c.client
+				ch <- u
+			}
+			return nil
+		},
+		opts,
+	).start()
+	for {
+		select {
+		case u := <-ch:
+			users = append(users, u)
+		case err := <-errs:
+			return users, err
+		}
 	}
-	return users, nil
 }
 
 // User gets a specific user.
@@ -160,38 +180,67 @@ func (c *Course) Activity() (interface{}, error) {
 
 // Files returns a channel of all the course's files
 func (c *Course) Files(opts ...Option) <-chan *File {
-	pager := c.filespager(opts)
-	return onlyFiles(pager, c.errorHandler)
+	ch := make(chan *File)
+	errs := c.filespager(ch, opts).start()
+	go func() {
+		for {
+			select {
+			case err := <-errs:
+				if err != nil {
+					c.errorHandler(err, nil)
+				}
+				close(ch)
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 // File will get a specific file id.
 func (c *Course) File(id int, opts ...Option) (*File, error) {
 	f := &File{client: c.client}
 	return f, getjson(
-		c.client, f,
-		asParams(opts),
+		c.client, f, asParams(opts),
 		"courses/%d/files/%d", c.ID, id,
 	)
 }
 
 // ListFiles returns a slice of files for the course.
 func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
-	p := c.filespager(opts)
-	objects, err := p.collect()
-	if err != nil {
-		return nil, err
+	ch := make(chan *File)
+	p := c.filespager(ch, opts)
+	files := make([]*File, 0)
+	p.start()
+	for {
+		select {
+		case file := <-ch:
+			files = append(files, file)
+		case err := <-p.errs:
+			close(ch)
+			return files, err
+		}
 	}
-	files := make([]*File, len(objects))
-	for i, o := range objects {
-		files[i] = o.(*File)
-	}
-	return files, nil
 }
 
 // Folders will retrieve the course's folders.
 func (c *Course) Folders(opts ...Option) <-chan *Folder {
-	pager := c.folderspager(opts)
-	return onlyFolders(pager, c.errorHandler)
+	ch := make(chan *Folder)
+	pager := c.folderspager(ch, opts)
+	pager.start()
+	go func() {
+		for {
+			select {
+			case e := <-pager.errs:
+				if e != nil {
+					c.errorHandler(e, nil)
+				}
+				close(ch)
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 // Folder will the a folder from the course given a folder id.
@@ -203,32 +252,35 @@ func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 
 // ListFolders returns a slice of folders for the course.
 func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
-	p := c.folderspager(opts)
-	objects, err := p.collect()
-	if err != nil {
-		return nil, err
+	ch := make(chan *Folder)
+	p := c.folderspager(ch, opts)
+	folders := make([]*Folder, 0)
+	p.start()
+	for {
+		select {
+		case folder := <-ch:
+			folders = append(folders, folder)
+		case err := <-p.errs:
+			close(ch)
+			return folders, err
+		}
 	}
-	folders := make([]*Folder, len(objects))
-	for i, o := range objects {
-		folders[i] = o.(*Folder)
-	}
-	return folders, nil
 }
 
 // FilesErrChan will return a channel that sends File structs
 // and a channel that sends errors.
-func (c *Course) FilesErrChan() (<-chan *File, <-chan error) {
-	p := c.filespager(nil)
-	_, files, errs := files(p)
-	return files, errs
+func (c *Course) FilesErrChan() (chan *File, <-chan error) {
+	files := make(chan *File)
+	p := c.filespager(files, nil)
+	return files, p.start()
 }
 
 // FoldersErrChan will return a channel for receiving folders and one for
 // errors.
-func (c *Course) FoldersErrChan() (<-chan *Folder, <-chan error) {
-	p := c.folderspager(nil)
-	_, folders, errs := folders(p)
-	return folders, errs
+func (c *Course) FoldersErrChan() (chan *Folder, <-chan error) {
+	folders := make(chan *Folder)
+	p := c.folderspager(folders, nil)
+	return folders, p.start()
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -403,110 +455,52 @@ type QuizPermissions struct {
 	Update         bool `json:"update"`
 }
 
-func (c *Course) filespager(params []Option) *paginated {
+func (c *Course) filespager(ch chan *File, params []Option) *paginated {
 	return newPaginatedList(
 		c.client,
 		fmt.Sprintf("courses/%d/files", c.ID),
-		filesInitFunc(c.client),
+		sendFilesFunc(c.client, ch),
 		params,
 	)
 }
 
-func (c *Course) folderspager(params []Option) *paginated {
+func (c *Course) folderspager(ch chan *Folder, params []Option) *paginated {
 	return newPaginatedList(
 		c.client,
 		fmt.Sprintf("courses/%d/folders", c.ID),
-		foldersInitFunc(c.client),
+		sendFoldersFunc(c.client, ch),
 		params,
 	)
 }
 
-func files(p *paginated) (int, <-chan *File, chan error) {
-	files := make(chan *File)
-	ch := p.start()
-	go func() {
-		for f := range ch {
-			files <- f.(*File)
+func sendFilesFunc(d doer, ch chan *File) func(io.Reader) error {
+	return func(r io.Reader) error {
+		files := make([]*File, 0)
+		err := json.NewDecoder(r).Decode(&files)
+		if err != nil {
+			return err
 		}
-		close(files)
-	}()
-	return p.n, files, p.errs
+		for _, f := range files {
+			f.client = d
+			ch <- f
+		}
+		return nil
+	}
 }
 
-func folders(p *paginated) (int, <-chan *Folder, chan error) {
-	folders := make(chan *Folder)
-	ch := p.start()
-	go func() {
-		for f := range ch {
-			folders <- f.(*Folder)
+func sendFoldersFunc(d doer, ch chan *Folder) sendFunc {
+	return func(r io.Reader) error {
+		folders := make([]*Folder, 0)
+		err := json.NewDecoder(r).Decode(&folders)
+		if err != nil {
+			return err
 		}
-		close(folders)
-	}()
-	return p.n, folders, p.errs
-}
-
-func onlyFiles(p *paginated, handle func(error, chan int)) <-chan *File {
-	results := make(chan *File)
-	quit := make(chan int)
-	go func() {
-		// handle errors from the first request
-		if err := <-p.errs; err != nil {
-			handle(err, quit)
+		for _, f := range folders {
+			f.client = d
+			ch <- f
 		}
-	}()
-	ch := p.start()
-	go func() {
-		defer close(results)
-		for i := 0; ; i++ {
-			select {
-			case <-quit:
-				return
-			case err := <-p.errs:
-				if err != nil {
-					handle(err, quit)
-					return
-				}
-			case f := <-ch:
-				if f == nil {
-					return
-				}
-				results <- f.(*File)
-			}
-		}
-	}()
-	return results
-}
-
-// omg where are generics when i need them
-func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Folder {
-	results := make(chan *Folder)
-	quit := make(chan int, 1)
-	go func() {
-		// handle errors from the first request
-		if err := <-p.errs; err != nil {
-			handle(err, quit)
-		}
-	}()
-	ch := p.start()
-	go func() {
-		defer close(results)
-		for i := 0; ; i++ {
-			select {
-			case <-quit:
-				return
-			case err := <-p.errs:
-				if err != nil {
-					handle(err, quit)
-				}
-			case f := <-ch:
-				if f == nil {
-					return
-				}
-				results <- f.(*Folder)
-			}
-		}
-	}()
-	return results
+		return nil
+	}
 }
 
 func defaultErrorHandler(err error, quit chan int) {

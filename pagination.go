@@ -14,10 +14,12 @@ import (
 
 type pageInitFunction func(int, io.Reader) ([]interface{}, error)
 
+type sendFunc func(io.Reader) error
+
 func newPaginatedList(
 	d doer,
 	path string,
-	init pageInitFunction,
+	send func(io.Reader) error,
 	parameters []Option,
 ) *paginated {
 	if parameters == nil {
@@ -27,12 +29,10 @@ func newPaginatedList(
 		do:      d,
 		path:    path,
 		query:   asParams(parameters),
-		init:    init,
+		send:    send,
 		perpage: 10,
 		wg:      new(sync.WaitGroup),
-		objects: make(chan interface{}),
 		errs:    make(chan error),
-		// errs: &PagedError{Errs: make(chan error), Count: 0},
 	}
 }
 
@@ -40,15 +40,13 @@ type paginated struct {
 	path  string
 	query params
 	do    doer
+	send  func(io.Reader) error
 
 	n       int
 	perpage int
-	objects chan interface{}
 	errs    chan error
-	// errs *PagedError
 
-	wg   *sync.WaitGroup
-	init pageInitFunction
+	wg *sync.WaitGroup
 }
 
 // returns <number of pages>, <first response>
@@ -67,89 +65,52 @@ func (p *paginated) firstReq() (int, *http.Response, error) {
 	return p.n, resp, nil
 }
 
-func (p *paginated) start() <-chan interface{} {
+func (p *paginated) start() <-chan error {
 	n, resp, err := p.firstReq() // n pages and first request
 	if err != nil {
-		p.errs <- err
-		close(p.errs)
-		close(p.objects)
-		return nil
+		go func() {
+			p.errs <- err
+			close(p.errs)
+		}()
+		return p.errs
 	}
 	p.wg.Add(n)
 
 	go func() {
 		defer resp.Body.Close()
 		defer p.wg.Done()
-		list, err := p.init(1, resp.Body)
-		if err != nil {
+		if err = p.send(resp.Body); err != nil {
 			p.errs <- err
-			return
-		}
-		for _, o := range list {
-			p.objects <- o
 		}
 	}()
 	for page := 2; page <= n; page++ {
-		go func(page int64, path string) {
+		go func(page int) {
 			defer p.wg.Done()
-			q := params{
-				"page":     {strconv.FormatInt(page, 10)}, // base 10
-				"per_page": {fmt.Sprintf("%d", p.perpage)}}
-			q.Join(p.query)
-			resp, err := get(p.do, path, q)
+			resp, err := get(p.do, p.path, p.getQuery(page))
 			if err != nil {
 				p.errs <- err
 				return
 			}
-			defer resp.Body.Close()
-			obs, err := p.init(int(page), resp.Body)
-			if err != nil {
+			if err = p.send(resp.Body); err != nil {
 				p.errs <- err
-				return
 			}
-			for _, o := range obs {
-				p.objects <- o
-			}
-		}(int64(page), p.path)
+			resp.Body.Close()
+		}(page)
 	}
 	go func() {
 		p.wg.Wait()
-		close(p.objects)
 		close(p.errs)
 	}()
-	return p.objects
+	return p.errs
 }
 
-func (p *paginated) channel() (<-chan interface{}, error) {
-	errCh := &PagedError{Errs: make(chan error), Count: 0}
-	for e := range p.errs {
-		if e != nil {
-			errCh.Errs <- e
-			errCh.Count++
-		}
+func (p *paginated) getQuery(page int) params {
+	q := params{
+		"page":     {strconv.FormatInt(int64(page), 10)}, // base 10
+		"per_page": {fmt.Sprintf("%d", p.perpage)},
 	}
-	if errCh.Count == 0 {
-		return p.objects, nil
-	}
-	return p.objects, errCh
-}
-
-func (p *paginated) collect() ([]interface{}, error) {
-	p.start()
-	collection := make([]interface{}, 0, p.n*p.perpage)
-	for {
-		select {
-		case err := <-p.errs:
-			if err != nil {
-				return nil, err
-			}
-		case obj := <-p.objects:
-			if obj == nil {
-				return collection, nil
-			}
-			collection = append(collection, obj)
-		}
-	}
+	q.Join(p.query)
+	return q
 }
 
 // PagedError is an error type returned by paginated lists

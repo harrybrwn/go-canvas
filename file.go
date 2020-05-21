@@ -1,9 +1,7 @@
 package canvas
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"time"
 )
 
@@ -100,48 +98,45 @@ func (f *Folder) File(id int, opts ...Option) (*File, error) {
 // Files will return a channel that sends all of the files
 // in the folder.
 func (f *Folder) Files() <-chan *File {
+	ch := make(chan *File)
 	pages := newPaginatedList(
 		f.client, fmt.Sprintf("folders/%d/files", f.ID),
-		filesInitFunc(f.client), nil,
+		sendFilesFunc(f.client, ch), nil,
 	)
-	return onlyFiles(pages, ConcurrentErrorHandler)
+	go func() {
+		for {
+			select {
+			case e := <-pages.errs:
+				if e != nil {
+					ConcurrentErrorHandler(e, nil)
+				}
+				close(ch)
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 // Folders will return a channel that sends all of the sub-folders.
 func (f *Folder) Folders() <-chan *Folder {
+	ch := make(chan *Folder)
 	pages := newPaginatedList(
 		f.client, fmt.Sprintf("folders/%d/folders", f.ID),
-		filesInitFunc(f.client), nil,
+		sendFoldersFunc(f.client, ch), nil,
 	)
-	return onlyFolders(pages, ConcurrentErrorHandler)
-}
-
-func filesInitFunc(c doer) pageInitFunction {
-	return func(page int, r io.Reader) ([]interface{}, error) {
-		files := make([]*File, 0)
-		if err := json.NewDecoder(r).Decode(&files); err != nil {
-			return nil, err
+	pages.start()
+	go func() {
+		for {
+			select {
+			case e := <-pages.errs:
+				if e != nil {
+					ConcurrentErrorHandler(e, nil)
+				}
+				close(ch)
+				return
+			}
 		}
-		objects := make([]interface{}, len(files))
-		for i, f := range files {
-			f.client = c
-			objects[i] = f
-		}
-		return objects, nil
-	}
-}
-
-func foldersInitFunc(c doer) pageInitFunction {
-	return func(page int, r io.Reader) ([]interface{}, error) {
-		folders := make([]*Folder, 0)
-		if err := json.NewDecoder(r).Decode(&folders); err != nil {
-			return nil, err
-		}
-		objects := make([]interface{}, len(folders))
-		for i, f := range folders {
-			f.client = c
-			objects[i] = f
-		}
-		return objects, nil
-	}
+	}()
+	return ch
 }
