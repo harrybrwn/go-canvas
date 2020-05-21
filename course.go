@@ -423,7 +423,7 @@ func (c *Course) folderspager(params []Option) *paginated {
 
 func files(p *paginated) (int, <-chan *File, chan error) {
 	files := make(chan *File)
-	ch := p.channel()
+	ch := p.start()
 	go func() {
 		for f := range ch {
 			files <- f.(*File)
@@ -435,7 +435,7 @@ func files(p *paginated) (int, <-chan *File, chan error) {
 
 func folders(p *paginated) (int, <-chan *Folder, chan error) {
 	folders := make(chan *Folder)
-	ch := p.channel()
+	ch := p.start()
 	go func() {
 		for f := range ch {
 			folders <- f.(*Folder)
@@ -454,7 +454,7 @@ func onlyFiles(p *paginated, handle func(error, chan int)) <-chan *File {
 			handle(err, quit)
 		}
 	}()
-	ch := p.channel()
+	ch := p.start()
 	go func() {
 		defer close(results)
 		for i := 0; ; i++ {
@@ -487,7 +487,7 @@ func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Fo
 			handle(err, quit)
 		}
 	}()
-	ch := p.channel()
+	ch := p.start()
 	go func() {
 		defer close(results)
 		for i := 0; ; i++ {
@@ -510,7 +510,6 @@ func onlyFolders(p *paginated, handle func(err error, quit chan int)) <-chan *Fo
 }
 
 func defaultErrorHandler(err error, quit chan int) {
-	quit <- 1
 	close(quit)
 	panic(err)
 }

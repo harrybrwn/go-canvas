@@ -107,7 +107,7 @@ func ActiveCourses(opts ...Option) ([]*Course, error) {
 // CompletedCourses returns a list of only the courses that are
 // not currently active and have been completed
 func (c *Canvas) CompletedCourses(opts ...Option) ([]*Course, error) {
-	p := params{"enrollment_state": {"completed"}}
+	p := params{"enrollment_state": {"completed"}, "per_page": {"100"}}
 	p.Add(opts...)
 	return getCourses(c.client, "/courses", p)
 }

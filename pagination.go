@@ -1,7 +1,6 @@
 package canvas
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+
+	"github.com/harrybrwn/errs"
 )
 
 type pageInitFunction func(int, io.Reader) ([]interface{}, error)
@@ -31,6 +32,7 @@ func newPaginatedList(
 		wg:      new(sync.WaitGroup),
 		objects: make(chan interface{}),
 		errs:    make(chan error),
+		// errs: &PagedError{Errs: make(chan error), Count: 0},
 	}
 }
 
@@ -43,12 +45,13 @@ type paginated struct {
 	perpage int
 	objects chan interface{}
 	errs    chan error
+	// errs *PagedError
 
 	wg   *sync.WaitGroup
 	init pageInitFunction
 }
 
-// returns <number of pages>, <first response
+// returns <number of pages>, <first response>
 func (p *paginated) firstReq() (int, *http.Response, error) {
 	q := params{"page": {"1"}, "per_page": {fmt.Sprintf("%d", p.perpage)}}
 	q.Join(p.query)
@@ -60,15 +63,11 @@ func (p *paginated) firstReq() (int, *http.Response, error) {
 	if err != nil {
 		return 0, nil, err
 	}
-	lastpage, ok := pages.links["last"]
-	if !ok {
-		return 0, nil, errors.New("could not find last page")
-	}
-	p.n = lastpage.page
+	p.n = pages.Last.page
 	return p.n, resp, nil
 }
 
-func (p *paginated) channel() <-chan interface{} {
+func (p *paginated) start() <-chan interface{} {
 	n, resp, err := p.firstReq() // n pages and first request
 	if err != nil {
 		p.errs <- err
@@ -94,7 +93,7 @@ func (p *paginated) channel() <-chan interface{} {
 		go func(page int64, path string) {
 			defer p.wg.Done()
 			q := params{
-				"page":     {strconv.FormatInt(page, 10)},
+				"page":     {strconv.FormatInt(page, 10)}, // base 10
 				"per_page": {fmt.Sprintf("%d", p.perpage)}}
 			q.Join(p.query)
 			resp, err := get(p.do, path, q)
@@ -121,8 +120,22 @@ func (p *paginated) channel() <-chan interface{} {
 	return p.objects
 }
 
+func (p *paginated) channel() (<-chan interface{}, error) {
+	errCh := &PagedError{Errs: make(chan error), Count: 0}
+	for e := range p.errs {
+		if e != nil {
+			errCh.Errs <- e
+			errCh.Count++
+		}
+	}
+	if errCh.Count == 0 {
+		return p.objects, nil
+	}
+	return p.objects, errCh
+}
+
 func (p *paginated) collect() ([]interface{}, error) {
-	p.channel()
+	p.start()
 	collection := make([]interface{}, 0, p.n*p.perpage)
 	for {
 		select {
@@ -139,6 +152,29 @@ func (p *paginated) collect() ([]interface{}, error) {
 	}
 }
 
+// PagedError is an error type returned by paginated lists
+// and contains an error channel.
+type PagedError struct {
+	Errs  chan error
+	Count int
+}
+
+func (pe *PagedError) send(e error) {
+	if e != nil {
+		pe.Errs <- e
+		pe.Count++
+	}
+}
+
+// Errors returns a channel of errors.
+func (pe *PagedError) Errors() <-chan error {
+	return pe.Errs
+}
+
+func (pe *PagedError) Error() string {
+	return fmt.Sprintf("found %d pagination errors in a %T", pe.Count, *pe)
+}
+
 func (p *paginated) ordered() ([]interface{}, error) {
 	return nil, nil
 }
@@ -147,23 +183,33 @@ var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
 
 func newLinkedResource(header http.Header) (*linkedResource, error) {
 	var err error
-	resource := &linkedResource{
-		links: map[string]*link{},
-	}
+	res := &linkedResource{}
 	links := header.Get("Link")
 	parts := resourceRegex.FindAllStringSubmatch(links, -1)
+	m := map[string]*link{}
 
 	for _, part := range parts {
-		resource.links[part[2]], err = newlink(part[1])
+		m[part[2]], err = newlink(part[1])
 		if err != nil {
-			return resource, err
+			return res, err
 		}
 	}
-	return resource, nil
+	var ok bool
+	if res.Current, ok = m["current"]; !ok {
+		return nil, errs.New("could not find current link")
+	}
+	if res.First, ok = m["first"]; !ok {
+		return nil, errs.New("could not find first link")
+	}
+	if res.Last, ok = m["last"]; !ok {
+		return nil, errs.New("could not find last link")
+	}
+	res.Next, _ = m["next"]
+	return res, nil
 }
 
-type linkedResource struct {
-	links map[string]*link
+type linkedResource struct { //map[string]*link
+	Current, First, Last, Next *link
 }
 
 type link struct {
