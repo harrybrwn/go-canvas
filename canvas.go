@@ -14,7 +14,7 @@ var (
 
 	// ConcurrentErrorHandler is the error handling callback for
 	// handling errors in tricky goroutines.
-	ConcurrentErrorHandler func(error, chan int) = defaultErrorHandler
+	ConcurrentErrorHandler func(error) = defaultErrorHandler
 
 	// DefaultUserAgent is the default user agent used to make requests.
 	DefaultUserAgent = "go-canvas"
@@ -213,18 +213,15 @@ func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
 
 // SearchAccounts will search for canvas accounts.
 // Options: name, domain, latitude, longitude
-//
-// 	c.SearchAccouts(Opt("name", "My School Name"))
-func (c *Canvas) SearchAccounts(opts ...Option) ([]Account, error) {
+func (c *Canvas) SearchAccounts(term string, opts ...Option) ([]Account, error) {
+	opts = append(opts, Opt("name", term))
 	return getAccounts(c.client, "accounts/search", opts)
 }
 
 // SearchAccounts will search for canvas accounts.
 // Options: name, domain, latitude, longitude
-//
-// 	c.SearchAccouts(Opt("name", "My School Name"))
-func SearchAccounts(opts ...Option) ([]Account, error) {
-	return defaultCanvas.SearchAccounts(opts...)
+func SearchAccounts(term string, opts ...Option) ([]Account, error) {
+	return defaultCanvas.SearchAccounts(term, opts...)
 }
 
 // Announcements will get the announcements
@@ -294,7 +291,6 @@ type DiscussionTopic struct {
 
 // CalendarEvent is a calendar event
 type CalendarEvent struct {
-	// ID                         int         `json:"id"`
 	ID                         string      `json:"id"`
 	Title                      string      `json:"title"`
 	StartAt                    string      `json:"start_at"`

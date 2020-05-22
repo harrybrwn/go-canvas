@@ -28,7 +28,7 @@ func newPaginatedList(
 	return &paginated{
 		do:      d,
 		path:    path,
-		query:   asParams(parameters),
+		opts:    parameters,
 		send:    send,
 		perpage: 10,
 		wg:      new(sync.WaitGroup),
@@ -37,32 +37,45 @@ func newPaginatedList(
 }
 
 type paginated struct {
-	path  string
-	query params
-	do    doer
-	send  func(io.Reader) error
+	path string
+	opts []Option
+	do   doer
+	send func(io.Reader) error
 
-	n       int
 	perpage int
 	errs    chan error
 
 	wg *sync.WaitGroup
 }
 
+type closable interface {
+	Close()
+}
+
+func handleErrs(errs <-chan error, ch closable, handle func(error)) {
+	for {
+		select {
+		case e := <-errs:
+			if e != nil {
+				handle(e)
+			}
+			ch.Close()
+			return
+		}
+	}
+}
+
 // returns <number of pages>, <first response>
 func (p *paginated) firstReq() (int, *http.Response, error) {
-	q := params{"page": {"1"}, "per_page": {fmt.Sprintf("%d", p.perpage)}}
-	q.Join(p.query)
-	resp, err := get(p.do, p.path, q)
+	resp, err := get(p.do, p.path, p.getQuery(1))
 	if err != nil {
 		return 0, nil, err
 	}
-	pages, err := newLinkedResource(resp.Header)
+	n, err := findlastpage(resp.Header)
 	if err != nil {
 		return 0, nil, err
 	}
-	p.n = pages.Last.page
-	return p.n, resp, nil
+	return n, resp, nil
 }
 
 func (p *paginated) start() <-chan error {
@@ -109,38 +122,27 @@ func (p *paginated) getQuery(page int) params {
 		"page":     {strconv.FormatInt(int64(page), 10)}, // base 10
 		"per_page": {fmt.Sprintf("%d", p.perpage)},
 	}
-	q.Join(p.query)
+	q.Add(p.opts...)
 	return q
 }
 
-// PagedError is an error type returned by paginated lists
-// and contains an error channel.
-type PagedError struct {
-	Errs  chan error
-	Count int
-}
+var (
+	resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
+	lastpageRegex = regexp.MustCompile(`.*<(.*)[\?&]page=([0-9]*).*>; rel="last"`)
+)
 
-func (pe *PagedError) send(e error) {
-	if e != nil {
-		pe.Errs <- e
-		pe.Count++
+func findlastpage(header http.Header) (int, error) {
+	links := header.Get("Link")
+	if links == "" {
+		return -1, errs.New("this is not a request for a paginated list")
 	}
+	parts := lastpageRegex.FindStringSubmatch(links)
+	if len(parts) < 3 {
+		return -1, errs.New("could not find last page")
+	}
+	page, err := strconv.ParseInt(parts[2], 10, 32)
+	return int(page), err
 }
-
-// Errors returns a channel of errors.
-func (pe *PagedError) Errors() <-chan error {
-	return pe.Errs
-}
-
-func (pe *PagedError) Error() string {
-	return fmt.Sprintf("found %d pagination errors in a %T", pe.Count, *pe)
-}
-
-func (p *paginated) ordered() ([]interface{}, error) {
-	return nil, nil
-}
-
-var resourceRegex = regexp.MustCompile(`<(.*?)>; rel="(.*?)"`)
 
 func newLinkedResource(header http.Header) (*linkedResource, error) {
 	var err error

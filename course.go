@@ -11,23 +11,23 @@ import (
 
 // Course represents a canvas course.
 type Course struct {
-	ID                   int         `json:"id"`
-	Name                 string      `json:"name"`
-	SisCourseID          int         `json:"sis_course_id"`
-	UUID                 string      `json:"uuid"`
-	IntegrationID        interface{} `json:"integration_id"`
-	SisImportID          int         `json:"sis_import_id"`
-	CourseCode           string      `json:"course_code"`
-	WorkflowState        string      `json:"workflow_state"`
-	AccountID            int         `json:"account_id"`
-	RootAccountID        int         `json:"root_account_id"`
-	EnrollmentTermID     int         `json:"enrollment_term_id"`
-	GradingStandardID    int         `json:"grading_standard_id"`
-	GradePassbackSetting string      `json:"grade_passback_setting"`
-	CreatedAt            time.Time   `json:"created_at"`
-	StartAt              time.Time   `json:"start_at"`
-	EndAt                time.Time   `json:"end_at"`
-	Locale               string      `json:"locale"`
+	ID                   int       `json:"id"`
+	Name                 string    `json:"name"`
+	SisCourseID          int       `json:"sis_course_id"`
+	UUID                 string    `json:"uuid"`
+	IntegrationID        string    `json:"integration_id"`
+	SisImportID          int       `json:"sis_import_id"`
+	CourseCode           string    `json:"course_code"`
+	WorkflowState        string    `json:"workflow_state"`
+	AccountID            int       `json:"account_id"`
+	RootAccountID        int       `json:"root_account_id"`
+	EnrollmentTermID     int       `json:"enrollment_term_id"`
+	GradingStandardID    int       `json:"grading_standard_id"`
+	GradePassbackSetting string    `json:"grade_passback_setting"`
+	CreatedAt            time.Time `json:"created_at"`
+	StartAt              time.Time `json:"start_at"`
+	EndAt                time.Time `json:"end_at"`
+	Locale               string    `json:"locale"`
 	Enrollments          []struct {
 		EnrollmentState                string `json:"enrollment_state"`
 		Role                           string `json:"role"`
@@ -86,7 +86,7 @@ type Course struct {
 	} `json:"blueprint_restrictions_by_object_type"`
 
 	client       doer
-	errorHandler func(error, chan int)
+	errorHandler func(error)
 }
 
 // Settings gets the course settings
@@ -132,44 +132,172 @@ type CourseSettings struct {
 }
 
 // Users will get a list of users in the course
-func (c *Course) Users(opts ...Option) (users []User, err error) {
-	return users, getjson(c.client, &users, asParams(opts), "/courses/%d/users", c.ID)
+func (c *Course) Users(opts ...Option) (users []*User, err error) {
+	return c.collectUsers("/courses/%d/users", opts)
 }
 
 // SearchUsers will search for a user in the course
-func (c *Course) SearchUsers(term string, opts ...Option) (users []User, err error) {
+func (c *Course) SearchUsers(term string, opts ...Option) (users []*User, err error) {
 	opts = append(opts, Opt("search_term", term))
-	ch := make(chan User)
-	errs := newPaginatedList(
-		c.client, fmt.Sprintf("/courses/%d/search_users", c.ID),
-		func(r io.Reader) error {
-			list := make([]User, 0)
-			err := json.NewDecoder(r).Decode(&list)
-			if err != nil {
-				return err
-			}
-			for _, u := range list {
-				u.client = c.client
-				ch <- u
-			}
-			return nil
-		},
-		opts,
-	).start()
-	for {
-		select {
-		case u := <-ch:
-			users = append(users, u)
-		case err := <-errs:
-			return users, err
-		}
-	}
+	return c.collectUsers("/courses/%d/search_users", opts)
 }
 
 // User gets a specific user.
 func (c *Course) User(id int, opts ...Option) (*User, error) {
 	u := &User{client: c.client}
 	return u, getjson(c.client, u, asParams(opts), "/courses/%d/users/%d", c.ID, id)
+}
+
+// Assignment will get an assignment from the course given an id.
+func (c *Course) Assignment(id int, opts ...Option) (ass *Assignment, err error) {
+	return ass, getjson(
+		c.client, &ass,
+		asParams(opts),
+		"/courses/%d/assignments/%d", c.ID, id,
+	)
+}
+
+// Assignments send the courses assignments over a channel concurrently.
+func (c *Course) Assignments(opts ...Option) <-chan *Assignment {
+	ch := make(assignmentChan)
+	pages := c.assignmentspager(ch, opts)
+	go handleErrs(pages.start(), ch, c.errorHandler)
+	return ch
+}
+
+// ListAssignments will get all the course assignments and put them in a slice.
+func (c *Course) ListAssignments(opts ...Option) (asses []*Assignment, err error) {
+	ch := make(assignmentChan)
+	pages := c.assignmentspager(ch, opts)
+	errs := pages.start()
+	for {
+		select {
+		case as := <-ch:
+			asses = append(asses, as)
+		case err = <-errs:
+			return asses, err
+		}
+	}
+}
+
+// Assignment is a struct holding assignment data
+type Assignment struct {
+	ID                             int              `json:"id"`
+	Name                           string           `json:"name"`
+	Description                    string           `json:"description"`
+	CreatedAt                      string           `json:"created_at"`
+	UpdatedAt                      string           `json:"updated_at"`
+	DueAt                          string           `json:"due_at"`
+	LockAt                         string           `json:"lock_at"`
+	UnlockAt                       string           `json:"unlock_at"`
+	HasOverrides                   bool             `json:"has_overrides"`
+	AllDates                       interface{}      `json:"all_dates"`
+	CourseID                       int              `json:"course_id"`
+	HTMLURL                        string           `json:"html_url"`
+	SubmissionsDownloadURL         string           `json:"submissions_download_url"`
+	AssignmentGroupID              int              `json:"assignment_group_id"`
+	DueDateRequired                bool             `json:"due_date_required"`
+	AllowedExtensions              []string         `json:"allowed_extensions"`
+	MaxNameLength                  int              `json:"max_name_length"`
+	TurnitinEnabled                bool             `json:"turnitin_enabled"`
+	VericiteEnabled                bool             `json:"vericite_enabled"`
+	TurnitinSettings               TurnitinSettings `json:"turnitin_settings"`
+	GradeGroupStudentsIndividually bool             `json:"grade_group_students_individually"`
+	ExternalToolTagAttributes      interface{}      `json:"external_tool_tag_attributes"`
+	PeerReviews                    bool             `json:"peer_reviews"`
+	AutomaticPeerReviews           bool             `json:"automatic_peer_reviews"`
+	PeerReviewCount                int              `json:"peer_review_count"`
+	PeerReviewsAssignAt            string           `json:"peer_reviews_assign_at"`
+	IntraGroupPeerReviews          bool             `json:"intra_group_peer_reviews"`
+	GroupCategoryID                int              `json:"group_category_id"`
+	NeedsGradingCount              int              `json:"needs_grading_count"`
+	NeedsGradingCountBySection     []struct {
+		SectionID         string `json:"section_id"`
+		NeedsGradingCount int    `json:"needs_grading_count"`
+	} `json:"needs_grading_count_by_section"`
+	Position        int    `json:"position"`
+	PostToSis       bool   `json:"post_to_sis"`
+	IntegrationID   string `json:"integration_id"`
+	IntegrationData struct {
+		Num5678 string `json:"5678"`
+	} `json:"integration_data"`
+	PointsPossible          float64         `json:"points_possible"`
+	SubmissionTypes         []string        `json:"submission_types"`
+	HasSubmittedSubmissions bool            `json:"has_submitted_submissions"`
+	GradingType             string          `json:"grading_type"`
+	GradingStandardID       interface{}     `json:"grading_standard_id"`
+	Published               bool            `json:"published"`
+	Unpublishable           bool            `json:"unpublishable"`
+	OnlyVisibleToOverrides  bool            `json:"only_visible_to_overrides"`
+	LockedForUser           bool            `json:"locked_for_user"`
+	LockInfo                LockInfo        `json:"lock_info"`
+	LockExplanation         string          `json:"lock_explanation"`
+	QuizID                  int             `json:"quiz_id"`
+	AnonymousSubmissions    bool            `json:"anonymous_submissions"`
+	DiscussionTopic         DiscussionTopic `json:"discussion_topic"`
+	FreezeOnCopy            bool            `json:"freeze_on_copy"`
+	Frozen                  bool            `json:"frozen"`
+	FrozenAttributes        []string        `json:"frozen_attributes"`
+	Submission              interface{}     `json:"submission"` // TODO: create a Submission struct and set this type to that
+	UseRubricForGrading     bool            `json:"use_rubric_for_grading"`
+
+	// RubricSettings                  string          `json:"rubric_settings"`
+	RubricSettings interface{} `json:"rubric_settings"`
+
+	Rubric []RubricCriteria `json:"rubric"`
+
+	AssignmentVisibility            []int       `json:"assignment_visibility"`
+	Overrides                       interface{} `json:"overrides"`
+	OmitFromFinalGrade              bool        `json:"omit_from_final_grade"`
+	ModeratedGrading                bool        `json:"moderated_grading"`
+	GraderCount                     int         `json:"grader_count"`
+	FinalGraderID                   int         `json:"final_grader_id"`
+	GraderCommentsVisibleToGraders  bool        `json:"grader_comments_visible_to_graders"`
+	GradersAnonymousToGraders       bool        `json:"graders_anonymous_to_graders"`
+	GraderNamesVisibleToFinalGrader bool        `json:"grader_names_visible_to_final_grader"`
+	AnonymousGrading                bool        `json:"anonymous_grading"`
+	AllowedAttempts                 int         `json:"allowed_attempts"`
+	PostManually                    bool        `json:"post_manually"`
+}
+
+// TurnitinSettings is a settings struct for turnitin
+type TurnitinSettings struct {
+	OriginalityReportVisibility string `json:"originality_report_visibility"`
+	SPaperCheck                 bool   `json:"s_paper_check"`
+	InternetCheck               bool   `json:"internet_check"`
+	JournalCheck                bool   `json:"journal_check"`
+	ExcludeBiblio               bool   `json:"exclude_biblio"`
+	ExcludeQuoted               bool   `json:"exclude_quoted"`
+	ExcludeSmallMatchesType     string `json:"exclude_small_matches_type"`
+	ExcludeSmallMatchesValue    int    `json:"exclude_small_matches_value"`
+}
+
+// RubricCriteria has the rubric information for an assignment.
+type RubricCriteria struct {
+	Points            float64 `json:"points"`
+	ID                string  `json:"id"`
+	LearningOutcomeID string  `json:"learning_outcome_id"`
+	VendorGUID        string  `json:"vendor_guid"`
+	Description       string  `json:"description"`
+	LongDescription   string  `json:"long_description"`
+	CriterionUseRange bool    `json:"criterion_use_range"`
+	// Ratings           []interface{} `json:"ratings"`
+	Ratings []struct {
+		ID              string  `json:"id"`
+		Description     string  `json:"description"`
+		LongDescription string  `json:"long_description"`
+		Points          float64 `json:"points"`
+	} `json:"ratings"`
+	IgnoreForScoring bool `json:"ignore_for_scoring"`
+}
+
+// LockInfo is a struct containing assignment lock status.
+type LockInfo struct {
+	AssetString    string `json:"asset_string"`
+	UnlockAt       string `json:"unlock_at"`
+	LockAt         string `json:"lock_at"`
+	ContextModule  string `json:"context_module"`
+	ManuallyLocked bool   `json:"manually_locked"`
 }
 
 // Activity returns a course's activity data
@@ -180,20 +308,9 @@ func (c *Course) Activity() (interface{}, error) {
 
 // Files returns a channel of all the course's files
 func (c *Course) Files(opts ...Option) <-chan *File {
-	ch := make(chan *File)
-	errs := c.filespager(ch, opts).start()
-	go func() {
-		for {
-			select {
-			case err := <-errs:
-				if err != nil {
-					c.errorHandler(err, nil)
-				}
-				close(ch)
-				return
-			}
-		}
-	}()
+	ch := make(fileChan)
+	pager := c.filespager(ch, opts)
+	go handleErrs(pager.start(), ch, c.errorHandler)
 	return ch
 }
 
@@ -225,21 +342,9 @@ func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
 
 // Folders will retrieve the course's folders.
 func (c *Course) Folders(opts ...Option) <-chan *Folder {
-	ch := make(chan *Folder)
+	ch := make(folderChan)
 	pager := c.folderspager(ch, opts)
-	pager.start()
-	go func() {
-		for {
-			select {
-			case e := <-pager.errs:
-				if e != nil {
-					c.errorHandler(e, nil)
-				}
-				close(ch)
-				return
-			}
-		}
-	}()
+	go handleErrs(pager.start(), ch, c.errorHandler)
 	return ch
 }
 
@@ -267,22 +372,6 @@ func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
 	}
 }
 
-// FilesErrChan will return a channel that sends File structs
-// and a channel that sends errors.
-func (c *Course) FilesErrChan() (chan *File, <-chan error) {
-	files := make(chan *File)
-	p := c.filespager(files, nil)
-	return files, p.start()
-}
-
-// FoldersErrChan will return a channel for receiving folders and one for
-// errors.
-func (c *Course) FoldersErrChan() (chan *Folder, <-chan error) {
-	folders := make(chan *Folder)
-	p := c.folderspager(folders, nil)
-	return folders, p.start()
-}
-
 // SetErrorHandler will set a error handling callback that is
 // used to handle errors in goroutines. The default error handler
 // will simply panic.
@@ -290,7 +379,7 @@ func (c *Course) FoldersErrChan() (chan *Folder, <-chan error) {
 // The callback should accept an error and a quit channel.
 // If a value is sent on the quit channel, whatever secsion of
 // code is receiving the channel will end gracefully.
-func (c *Course) SetErrorHandler(f func(error, chan int)) {
+func (c *Course) SetErrorHandler(f func(error)) {
 	c.errorHandler = f
 }
 
@@ -473,6 +562,39 @@ func (c *Course) folderspager(ch chan *Folder, params []Option) *paginated {
 	)
 }
 
+func (c *Course) assignmentspager(ch chan *Assignment, params []Option) *paginated {
+	return newPaginatedList(
+		c.client, fmt.Sprintf("/courses/%d/assignments", c.ID),
+		func(r io.Reader) error {
+			asses := make([]*Assignment, 0, 10)
+			err := json.NewDecoder(r).Decode(&asses)
+			if err != nil {
+				return err
+			}
+			for _, a := range asses {
+				ch <- a
+			}
+			return nil
+		}, params,
+	)
+}
+
+func (c *Course) collectUsers(path string, opts []Option) (users []*User, err error) {
+	ch := make(chan *User)
+	errs := newPaginatedList(
+		c.client, fmt.Sprintf(path, c.ID),
+		sendUserFunc(c.client, ch), opts,
+	).start()
+	for {
+		select {
+		case u := <-ch:
+			users = append(users, u)
+		case err := <-errs:
+			return users, err
+		}
+	}
+}
+
 func sendFilesFunc(d doer, ch chan *File) func(io.Reader) error {
 	return func(r io.Reader) error {
 		files := make([]*File, 0)
@@ -503,7 +625,27 @@ func sendFoldersFunc(d doer, ch chan *Folder) sendFunc {
 	}
 }
 
-func defaultErrorHandler(err error, quit chan int) {
-	close(quit)
+func sendUserFunc(d doer, ch chan *User) sendFunc {
+	return func(r io.Reader) error {
+		list := make([]*User, 0)
+		err := json.NewDecoder(r).Decode(&list)
+		if err != nil {
+			return err
+		}
+		for _, u := range list {
+			u.client = d
+			ch <- u
+		}
+		return nil
+	}
+}
+
+func defaultErrorHandler(err error) {
 	panic(err)
+}
+
+type assignmentChan chan *Assignment
+
+func (ac assignmentChan) Close() {
+	close(ac)
 }

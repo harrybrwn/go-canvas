@@ -98,45 +98,34 @@ func (f *Folder) File(id int, opts ...Option) (*File, error) {
 // Files will return a channel that sends all of the files
 // in the folder.
 func (f *Folder) Files() <-chan *File {
-	ch := make(chan *File)
+	ch := make(fileChan)
 	pages := newPaginatedList(
 		f.client, fmt.Sprintf("folders/%d/files", f.ID),
 		sendFilesFunc(f.client, ch), nil,
 	)
-	go func() {
-		for {
-			select {
-			case e := <-pages.errs:
-				if e != nil {
-					ConcurrentErrorHandler(e, nil)
-				}
-				close(ch)
-				return
-			}
-		}
-	}()
+	go handleErrs(pages.start(), ch, ConcurrentErrorHandler)
 	return ch
 }
 
 // Folders will return a channel that sends all of the sub-folders.
 func (f *Folder) Folders() <-chan *Folder {
-	ch := make(chan *Folder)
+	ch := make(folderChan)
 	pages := newPaginatedList(
 		f.client, fmt.Sprintf("folders/%d/folders", f.ID),
 		sendFoldersFunc(f.client, ch), nil,
 	)
-	pages.start()
-	go func() {
-		for {
-			select {
-			case e := <-pages.errs:
-				if e != nil {
-					ConcurrentErrorHandler(e, nil)
-				}
-				close(ch)
-				return
-			}
-		}
-	}()
+	go handleErrs(pages.start(), ch, ConcurrentErrorHandler)
 	return ch
+}
+
+type fileChan chan *File
+
+func (fc fileChan) Close() {
+	close(fc)
+}
+
+type folderChan chan *Folder
+
+func (fc folderChan) Close() {
+	close(fc)
 }

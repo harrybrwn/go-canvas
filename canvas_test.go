@@ -39,7 +39,7 @@ func testUser() (*User, error) {
 	return testingUser, err
 }
 
-func testCourse() *Course {
+func testCourse() Course {
 	if testingCourse == nil {
 		var err error
 		testingCourse, err = GetCourse(2056049)
@@ -47,7 +47,7 @@ func testCourse() *Course {
 			panic("could not get test course: " + err.Error())
 		}
 	}
-	return testingCourse
+	return *testingCourse
 }
 
 func testCourses() ([]*Course, error) {
@@ -60,6 +60,19 @@ func testCourses() ([]*Course, error) {
 }
 
 func Test(t *testing.T) {
+}
+func TestAssignments(t *testing.T) {
+	c := testCourse()
+	i := 0
+	for ass := range c.Assignments() {
+		i++
+		if ass.ID == 0 {
+			t.Error("bad assignment id")
+		}
+	}
+	if i != 1 {
+		t.Error("should have one assignment")
+	}
 }
 
 func TestSetHost(t *testing.T) {
@@ -89,7 +102,6 @@ func TestAnnouncements(t *testing.T) {
 	c := New(testToken())
 	_, err := c.Announcements([]string{})
 	is.True(err != nil)
-
 	_, err = c.Announcements([]string{"course_1"})
 	is.NoErr(err)
 }
@@ -111,44 +123,6 @@ func TestCanvas_Err(t *testing.T) {
 			t.Error("expected nil courses")
 		}
 	}
-}
-
-func TestUser(t *testing.T) {
-	t.Skip()
-	is := is.New(t)
-	u, err := testUser()
-	is.NoErr(err)
-	settings, err := u.Settings()
-	is.NoErr(err)
-	is.True(len(settings) > 0)
-
-	profile, err := u.Profile()
-	is.NoErr(err)
-	is.True(profile.ID != 0)
-	is.True(len(profile.Name) > 0)
-
-	subs, err := u.GradedSubmissions()
-	is.NoErr(err)
-	is.True(len(subs) > 0)
-
-	colors, err := u.Colors()
-	is.NoErr(err)
-	var col, val string
-	for col, val = range colors {
-		break
-	}
-	color, err := u.Color(col)
-	is.NoErr(err)
-	is.Equal(color.HexCode, val)
-
-	user, err := GetUser(u.ID)
-	if err != nil {
-		t.Error(err)
-	}
-	is.Equal(user.Name, u.Name) // names should be the same
-	is.Equal(user.ID, u.ID)
-	is.Equal(user.Email, u.Email)
-	is.True(user.CreatedAt.Equal(u.CreatedAt))
 }
 
 func TestUser_Err(t *testing.T) {
@@ -190,7 +164,9 @@ func TestSearchUser(t *testing.T) {
 		t.Error("test account only has one user")
 	}
 	for _, u := range users {
-		fmt.Println(u)
+		if u.Name != "Test User" {
+			t.Error("wrong user")
+		}
 	}
 }
 
@@ -198,9 +174,8 @@ func TestCourse_Files(t *testing.T) {
 	is := is.New(t)
 	c := testCourse()
 
-	c.SetErrorHandler(func(e error, quit chan int) {
+	c.SetErrorHandler(func(e error) {
 		t.Fatal(e)
-		quit <- 1
 	})
 	is.True(c.client != nil)
 
@@ -226,6 +201,12 @@ func TestCourse_Files(t *testing.T) {
 			is.True(folder.client != nil)
 			is.True(folder.ID != 0)
 		}
+		for f := range folder.Folders() {
+			is.True(f.ParentFolderID == folder.ID)
+		}
+		for f := range folder.Files() {
+			is.True(f.FolderID == folder.ID)
+		}
 	})
 }
 
@@ -234,7 +215,7 @@ func TestCourseFiles_Err(t *testing.T) {
 	c := testCourse()
 
 	errorCount := 0
-	c.SetErrorHandler(func(e error, q chan int) {
+	c.SetErrorHandler(func(e error) {
 		if e == nil {
 			t.Error("expected an error")
 		} else {
@@ -348,12 +329,12 @@ func TestCourse_Settings_Err(t *testing.T) {
 }
 
 func TestAccount(t *testing.T) {
-	t.Skip("can't figure out how to get account authorization")
 	is := is.New(t)
 	c := New(testToken())
-	_, err := c.SearchAccounts(Opt("name", "UC Berkeley"))
+	_, err := c.SearchAccounts("UC Berkeley")
 	is.NoErr(err)
 
+	t.Skip("can't figure out how to get account authorization")
 	as, err := Accounts()
 	if err != nil {
 		t.Error(err)
@@ -365,24 +346,6 @@ func TestAccount(t *testing.T) {
 		t.Error(err)
 	}
 	fmt.Println(a)
-}
-
-func TestErrChan(t *testing.T) {
-	t.Skip("the FilesErrChan api is not broken")
-	is := is.New(t)
-	courses, err := testCourses()
-	is.NoErr(err)
-	c := courses[1]
-	files, _ := c.FilesErrChan()
-	go func() {
-		close(files)
-	}()
-	for f := range files {
-		fmt.Println(f.ID, f.Filename)
-	}
-	folders, _ := c.FoldersErrChan()
-	for range folders {
-	}
 }
 
 func TestBookmarks(t *testing.T) {
@@ -413,6 +376,29 @@ func TestBookmarks(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("expected an error")
+	}
+}
+
+func TestLinks(t *testing.T) {
+	headers := []http.Header{
+		{"Link": {`<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=45&per_page=10>; rel="last"`}},
+		{"Link": {`<https://canvas.instructure.com/api/v1/courses/000/files?page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/files?page=2&per_page=10>; rel="next",<https://canvas.instructure.com/api/v1/courses/000/files?page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/files?page=45&per_page=10>; rel="last"`}},
+	}
+	for _, header := range headers {
+		n, err := findlastpage(header)
+		if err != nil {
+			t.Error(err)
+		}
+		if n != 45 {
+			t.Error("wrong page number")
+		}
+		links, err := newLinkedResource(header)
+		if err != nil {
+			t.Error(err)
+		}
+		if links.Last.page != 45 {
+			t.Error("wrong page number")
+		}
 	}
 }
 
