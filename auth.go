@@ -40,7 +40,7 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 
 	var e error
 	switch resp.StatusCode {
-	case http.StatusOK:
+	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
 		return resp, err
 	case http.StatusForbidden:
 		resp.Body.Close()
@@ -74,8 +74,15 @@ func post(c doer, endpoint string, vals encoder) (*http.Response, error) {
 	if vals != nil {
 		q = vals.Encode()
 	}
-
 	return do(c, newreq("POST", endpoint, q))
+}
+
+func delete(c doer, endpoint string, vals encoder) (*http.Response, error) {
+	var q string
+	if vals != nil {
+		q = vals.Encode()
+	}
+	return do(c, newreq("DELETE", endpoint, q))
 }
 
 func newreq(method, urlpath, query string) *http.Request {
@@ -183,7 +190,7 @@ func (e *Error) Error() string {
 	if e.Errors.EndDate != "" {
 		return fmt.Sprintf("end_date: %s", e.Errors.EndDate)
 	}
-	return "canvas error"
+	return fmt.Sprintf("canvas error: %#v", e)
 }
 
 // AuthError is an authentication error response from canvas.

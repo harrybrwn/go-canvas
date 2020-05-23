@@ -2,3 +2,5 @@ github.com/harrybrwn/errs v0.0.1 h1:zT9uVS1xYArWz5KEhPgRNLykCs9ZK7EZz+fkMHvhx9I=
 github.com/harrybrwn/errs v0.0.1/go.mod h1:xekiTrup1h5u3YF9bpJT7qD1cmgYBA8qN9iHd/h/sho=
 github.com/matryer/is v1.3.0 h1:9qiso3jaJrOe6qBRJRBt2Ldht05qDiFP9le0JOIhRSI=
 github.com/matryer/is v1.3.0/go.mod h1:2fLPjFQM9rhQ15aVEtbuwhJinnOqrmgXPNdZsdwlWXA=
+github.com/mitchellh/mapstructure v1.3.1 h1:cCBH2gTD2K0OtLlv/Y5H01VQCqmlDxz30kS5Y5bqfLA=
+github.com/mitchellh/mapstructure v1.3.1/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=

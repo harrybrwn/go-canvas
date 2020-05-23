@@ -34,9 +34,7 @@ func SetToken(token string) {
 }
 
 // SetHost will set the package level host.
-func SetHost(host string) error {
-	return defaultCanvas.SetHost(host)
-}
+func SetHost(host string) error { return defaultCanvas.SetHost(host) }
 
 // New will create a Canvas struct from an api token.
 // New uses the default host.
@@ -69,15 +67,16 @@ func (c *Canvas) SetHost(host string) error {
 
 // Courses lists all of the courses associated
 // with that canvas object.
+func Courses(opts ...Option) ([]*Course, error) { return defaultCanvas.Courses(opts...) }
+
+// Courses lists all of the courses associated
+// with that canvas object.
 func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(c.client, "/courses", asParams(opts))
 }
 
-// Courses lists all of the courses associated
-// with that canvas object.
-func Courses(opts ...Option) ([]*Course, error) {
-	return defaultCanvas.Courses(opts...)
-}
+// GetCourse will get a course given a course id.
+func GetCourse(id int, opts ...Option) (*Course, error) { return defaultCanvas.GetCourse(id, opts...) }
 
 // GetCourse will get a course given a course id.
 func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
@@ -86,9 +85,9 @@ func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
 }
 
 // GetCourse will get a course given a course id.
-func GetCourse(id int, opts ...Option) (*Course, error) {
-	return defaultCanvas.GetCourse(id, opts...)
-}
+// func GetCourse(id int, opts ...Option) (*Course, error) {
+//	return defaultCanvas.GetCourse(id, opts...)
+// }
 
 // ActiveCourses returns a list of only the courses that are
 // currently active
@@ -100,9 +99,7 @@ func (c *Canvas) ActiveCourses(opts ...Option) ([]*Course, error) {
 
 // ActiveCourses returns a list of only the courses that are
 // currently active
-func ActiveCourses(opts ...Option) ([]*Course, error) {
-	return defaultCanvas.ActiveCourses(opts...)
-}
+func ActiveCourses(opts ...Option) ([]*Course, error) { return defaultCanvas.ActiveCourses(opts...) }
 
 // CompletedCourses returns a list of only the courses that are
 // not currently active and have been completed
@@ -124,9 +121,7 @@ func (c *Canvas) GetUser(id int, opts ...Option) (*User, error) {
 }
 
 // GetUser will return a user object given that user's ID.
-func GetUser(id int, opts ...Option) (*User, error) {
-	return defaultCanvas.GetUser(id, opts...)
-}
+func GetUser(id int, opts ...Option) (*User, error) { return defaultCanvas.GetUser(id, opts...) }
 
 // CurrentUser get the currently logged in user.
 func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
@@ -134,9 +129,7 @@ func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
 }
 
 // CurrentUser get the currently logged in user.
-func CurrentUser(opts ...Option) (*User, error) {
-	return defaultCanvas.CurrentUser(opts...)
-}
+func CurrentUser(opts ...Option) (*User, error) { return defaultCanvas.CurrentUser(opts...) }
 
 // Todos will get the current user's todo's.
 func (c *Canvas) Todos() error {
@@ -155,9 +148,7 @@ func (c *Canvas) CurrentAccount() (a *Account, err error) {
 }
 
 // CurrentAccount will get the current account.
-func CurrentAccount() (a *Account, err error) {
-	return defaultCanvas.CurrentAccount()
-}
+func CurrentAccount() (a *Account, err error) { return defaultCanvas.CurrentAccount() }
 
 // Accounts will list the accounts
 func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
@@ -165,9 +156,7 @@ func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
 }
 
 // Accounts will list the accounts
-func Accounts(opts ...Option) ([]Account, error) {
-	return defaultCanvas.Accounts()
-}
+func Accounts(opts ...Option) ([]Account, error) { return defaultCanvas.Accounts() }
 
 // CourseAccounts will make a call to the course accounts endpoint
 func (c *Canvas) CourseAccounts(opts ...Option) ([]Account, error) {
@@ -175,9 +164,7 @@ func (c *Canvas) CourseAccounts(opts ...Option) ([]Account, error) {
 }
 
 // CourseAccounts will make a call to the course accounts endpoint
-func CourseAccounts(opts ...Option) ([]Account, error) {
-	return defaultCanvas.CourseAccounts()
-}
+func CourseAccounts(opts ...Option) ([]Account, error) { return defaultCanvas.CourseAccounts() }
 
 // Account is an account
 type Account struct {
@@ -208,7 +195,11 @@ type Account struct {
 
 // Courses returns the account's list of courses
 func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
-	return getCourses(a.cli, fmt.Sprintf("/accounts/%d/courses", a.ID), asParams(opts))
+	return getCourses(
+		a.cli,
+		fmt.Sprintf("/accounts/%d/courses", a.ID),
+		asParams(opts),
+	)
 }
 
 // SearchAccounts will search for canvas accounts.
@@ -225,14 +216,20 @@ func SearchAccounts(term string, opts ...Option) ([]Account, error) {
 }
 
 // Announcements will get the announcements
-func (c *Canvas) Announcements(contextCodes []string, opts ...Option) (arr []DiscussionTopic, err error) {
+func (c *Canvas) Announcements(
+	contextCodes []string,
+	opts ...Option,
+) (arr []DiscussionTopic, err error) {
 	p := params{"context_codes": contextCodes}
 	p.Add(opts...)
 	return arr, getjson(c.client, &arr, p, "/announcements")
 }
 
 // Announcements will get the announcements
-func Announcements(contextCodes []string, opts ...Option) ([]DiscussionTopic, error) {
+func Announcements(
+	contextCodes []string,
+	opts ...Option,
+) ([]DiscussionTopic, error) {
 	return defaultCanvas.Announcements(contextCodes, opts...)
 }
 
@@ -365,14 +362,10 @@ func (c *Canvas) CreateBookmark(b *Bookmark) error {
 }
 
 // Bookmarks will get the current user's bookmarks.
-func Bookmarks(opts ...Option) ([]Bookmark, error) {
-	return defaultCanvas.Bookmarks(opts...)
-}
+func Bookmarks(opts ...Option) ([]Bookmark, error) { return defaultCanvas.Bookmarks(opts...) }
 
 // CreateBookmark will take a bookmark and send it to canvas.
-func CreateBookmark(b *Bookmark) error {
-	return defaultCanvas.CreateBookmark(b)
-}
+func CreateBookmark(b *Bookmark) error { return defaultCanvas.CreateBookmark(b) }
 
 // DeleteBookmark will delete a bookmark
 func (c *Canvas) DeleteBookmark(b *Bookmark) error {
@@ -380,9 +373,7 @@ func (c *Canvas) DeleteBookmark(b *Bookmark) error {
 }
 
 // DeleteBookmark will delete a bookmark
-func DeleteBookmark(b *Bookmark) error {
-	return defaultCanvas.DeleteBookmark(b)
-}
+func DeleteBookmark(b *Bookmark) error { return defaultCanvas.DeleteBookmark(b) }
 
 // Bookmark is a bookmark object.
 type Bookmark struct {
@@ -429,8 +420,7 @@ func createBookmark(d doer, id interface{}, b *Bookmark) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	return err
+	return resp.Body.Close()
 }
 
 func deleteBookmark(d doer, pathvar interface{}, id int) error {

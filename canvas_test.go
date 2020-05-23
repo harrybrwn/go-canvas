@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/matryer/is"
 )
@@ -69,9 +71,34 @@ func TestAssignments(t *testing.T) {
 		if ass.ID == 0 {
 			t.Error("bad assignment id")
 		}
+		// fmt.Println(ass)
 	}
 	if i != 1 {
 		t.Error("should have one assignment")
+	}
+
+	newass, err := c.CreateAssignment(Opt("assignment[name]", "created assignment"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newass == nil {
+		t.Fatal("new assignment is nil")
+	}
+	if newass.ID == 0 {
+		t.Error("got a bad id, could not create assignment")
+	}
+
+	asses, err := c.ListAssignments(IncludeOpt("overrides"))
+	if err != nil {
+		t.Error(err)
+	}
+	if len(asses) != 2 {
+		t.Error("should have one assignment")
+	}
+
+	_, err = c.DeleteAssignmentByID(newass.ID)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -424,6 +451,36 @@ func TestErrors(t *testing.T) {
 	is.Equal(err.Error(), "end_date: no")
 	is.True(IsRateLimit(ErrRateLimitExceeded))
 	is.True(!IsRateLimit(nil))
+}
+
+func TestOptions(t *testing.T) {
+	is := is.New(t)
+	o := ArrayOpt("include", "one", "two")
+	o2 := IncludeOpt("one", "two")
+	is.Equal(o.Name(), o2.Name())
+	is.Equal(o.Value(), o2.Value())
+
+	opts := []Option{
+		Opt("key", "value"),
+		DateOpt("date", time.Now()),
+		SortOpt("date"),
+	}
+	q := asParams(opts).Encode()
+	if q == "" {
+		t.Error("should not be empty")
+	}
+	if !strings.Contains(q, "sort") {
+		t.Error("should have sorting option")
+	}
+	if !strings.Contains(q, "key=value") {
+		t.Error("should have the key-value pair")
+	}
+	prefed := toPrefixedOpts("prefix", opts)
+	for _, o := range prefed {
+		if !strings.Contains(o.Name(), "prefix") {
+			t.Error("should contain the prefix")
+		}
+	}
 }
 
 func deauthorize(d doer) func() {

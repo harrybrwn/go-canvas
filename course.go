@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"time"
 
 	"github.com/harrybrwn/errs"
+	"github.com/mitchellh/mapstructure"
 )
 
 // Course represents a canvas course.
@@ -180,84 +182,110 @@ func (c *Course) ListAssignments(opts ...Option) (asses []*Assignment, err error
 	}
 }
 
+// CreateAssignment will create an assignment
+func (c *Course) CreateAssignment(opts ...Option) (*Assignment, error) {
+	resp, err := post(c.client, fmt.Sprintf("/courses/%d/assignments", c.ID), asParams(opts))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	as := &Assignment{}
+	return as, json.NewDecoder(resp.Body).Decode(as)
+}
+
+// DeleteAssignment will delete an assignment
+func (c *Course) DeleteAssignment(a Assignment) (*Assignment, error) {
+	return c.DeleteAssignmentByID(a.ID)
+}
+
+// DeleteAssignmentByID will delete an assignment givent only an assignment ID.
+func (c *Course) DeleteAssignmentByID(id int) (*Assignment, error) {
+	resp, err := delete(c.client, fmt.Sprintf("courses/%d/assignments/%d", c.ID, id), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	a := &Assignment{}
+	return a, json.NewDecoder(resp.Body).Decode(&a)
+}
+
 // Assignment is a struct holding assignment data
 type Assignment struct {
-	ID                             int              `json:"id"`
-	Name                           string           `json:"name"`
-	Description                    string           `json:"description"`
-	CreatedAt                      string           `json:"created_at"`
-	UpdatedAt                      string           `json:"updated_at"`
-	DueAt                          string           `json:"due_at"`
-	LockAt                         string           `json:"lock_at"`
-	UnlockAt                       string           `json:"unlock_at"`
-	HasOverrides                   bool             `json:"has_overrides"`
-	AllDates                       interface{}      `json:"all_dates"`
-	CourseID                       int              `json:"course_id"`
-	HTMLURL                        string           `json:"html_url"`
-	SubmissionsDownloadURL         string           `json:"submissions_download_url"`
-	AssignmentGroupID              int              `json:"assignment_group_id"`
-	DueDateRequired                bool             `json:"due_date_required"`
-	AllowedExtensions              []string         `json:"allowed_extensions"`
-	MaxNameLength                  int              `json:"max_name_length"`
-	TurnitinEnabled                bool             `json:"turnitin_enabled"`
-	VericiteEnabled                bool             `json:"vericite_enabled"`
-	TurnitinSettings               TurnitinSettings `json:"turnitin_settings"`
-	GradeGroupStudentsIndividually bool             `json:"grade_group_students_individually"`
-	ExternalToolTagAttributes      interface{}      `json:"external_tool_tag_attributes"`
-	PeerReviews                    bool             `json:"peer_reviews"`
-	AutomaticPeerReviews           bool             `json:"automatic_peer_reviews"`
-	PeerReviewCount                int              `json:"peer_review_count"`
-	PeerReviewsAssignAt            string           `json:"peer_reviews_assign_at"`
-	IntraGroupPeerReviews          bool             `json:"intra_group_peer_reviews"`
-	GroupCategoryID                int              `json:"group_category_id"`
-	NeedsGradingCount              int              `json:"needs_grading_count"`
+	ID          int       `json:"id" mapstructure:",omitempty"`
+	Name        string    `json:"name" mapstructure:"assignment[name],omitempty"`
+	Description string    `json:"description" mapstructure:"assignment[description],omitempty"`
+	CreatedAt   time.Time `json:"created_at" mapstructure:",omitempty"`
+	UpdatedAt   time.Time `json:"updated_at" mapstructure:",omitempty"`
+	DueAt       time.Time `json:"due_at" mapstructure:"assignment[due_at],omitempty"`
+	LockAt      time.Time `json:"lock_at" mapstructure:"assignment[lock_at],omitempty"`
+	UnlockAt    time.Time `json:"unlock_at" mapstructure:"assignment[unlock_at],omitempty"`
+
+	HasOverrides           bool                 `json:"has_overrides" mapstructure:",omitempty"`
+	Overrides              []AssignmentOverride `json:"overrides" mapstructure:"assignment[assignment_overrides][],omitempty"`
+	OnlyVisibleToOverrides bool                 `json:"only_visible_to_overrides" mapstructure:"assignment[only_visible_to_overrides],omitempty"`
+
+	AllDates                       interface{}      `json:"all_dates" mapstructure:",omitempty"`
+	CourseID                       int              `json:"course_id" mapstructure:",omitempty"`
+	HTMLURL                        string           `json:"html_url" mapstructure:",omitempty"`
+	SubmissionsDownloadURL         string           `json:"submissions_download_url" mapstructure:",omitempty"`
+	AssignmentGroupID              int              `json:"assignment_group_id" mapstructure:",omitempty"`
+	DueDateRequired                bool             `json:"due_date_required" mapstructure:",omitempty"`
+	AllowedExtensions              []string         `json:"allowed_extensions" mapstructure:"assignment[allowed_extensions],omitempty"`
+	MaxNameLength                  int              `json:"max_name_length" mapstructure:",omitempty"`
+	TurnitinEnabled                bool             `json:"turnitin_enabled" mapstructure:",omitempty"`
+	VericiteEnabled                bool             `json:"vericite_enabled" mapstructure:",omitempty"`
+	TurnitinSettings               TurnitinSettings `json:"turnitin_settings" mapstructure:",omitempty"`
+	GradeGroupStudentsIndividually bool             `json:"grade_group_students_individually" mapstructure:",omitempty"`
+	ExternalToolTagAttributes      interface{}      `json:"external_tool_tag_attributes" mapstructure:",omitempty"`
+	PeerReviews                    bool             `json:"peer_reviews" mapstructure:",omitempty"`
+	AutomaticPeerReviews           bool             `json:"automatic_peer_reviews" mapstructure:",omitempty"`
+	PeerReviewCount                int              `json:"peer_review_count" mapstructure:",omitempty"`
+	PeerReviewsAssignAt            time.Time        `json:"peer_reviews_assign_at" mapstructure:",omitempty"`
+	IntraGroupPeerReviews          bool             `json:"intra_group_peer_reviews" mapstructure:",omitempty"`
+	GroupCategoryID                int              `json:"group_category_id" mapstructure:",omitempty"`
+	NeedsGradingCount              int              `json:"needs_grading_count" mapstructure:",omitempty"`
 	NeedsGradingCountBySection     []struct {
-		SectionID         string `json:"section_id"`
-		NeedsGradingCount int    `json:"needs_grading_count"`
-	} `json:"needs_grading_count_by_section"`
-	Position        int    `json:"position"`
-	PostToSis       bool   `json:"post_to_sis"`
-	IntegrationID   string `json:"integration_id"`
-	IntegrationData struct {
-		Num5678 string `json:"5678"`
-	} `json:"integration_data"`
-	PointsPossible          float64         `json:"points_possible"`
-	SubmissionTypes         []string        `json:"submission_types"`
-	HasSubmittedSubmissions bool            `json:"has_submitted_submissions"`
-	GradingType             string          `json:"grading_type"`
-	GradingStandardID       interface{}     `json:"grading_standard_id"`
-	Published               bool            `json:"published"`
-	Unpublishable           bool            `json:"unpublishable"`
-	OnlyVisibleToOverrides  bool            `json:"only_visible_to_overrides"`
-	LockedForUser           bool            `json:"locked_for_user"`
-	LockInfo                LockInfo        `json:"lock_info"`
-	LockExplanation         string          `json:"lock_explanation"`
-	QuizID                  int             `json:"quiz_id"`
-	AnonymousSubmissions    bool            `json:"anonymous_submissions"`
-	DiscussionTopic         DiscussionTopic `json:"discussion_topic"`
-	FreezeOnCopy            bool            `json:"freeze_on_copy"`
-	Frozen                  bool            `json:"frozen"`
-	FrozenAttributes        []string        `json:"frozen_attributes"`
-	Submission              interface{}     `json:"submission"` // TODO: create a Submission struct and set this type to that
-	UseRubricForGrading     bool            `json:"use_rubric_for_grading"`
+		SectionID         string `json:"section_id" mapstructure:",omitempty"`
+		NeedsGradingCount int    `json:"needs_grading_count" mapstructure:",omitempty"`
+	} `json:"needs_grading_count_by_section" mapstructure:",omitempty"`
+	Position        int               `json:"position" mapstructure:"assignment[position],omitempty"`
+	PostToSis       bool              `json:"post_to_sis" mapstructure:",omitempty"`
+	IntegrationID   string            `json:"integration_id" mapstructure:",omitempty"`
+	IntegrationData map[string]string `json:"integration_data" mapstructure:"assignment[integration_data],omitempty"`
 
-	// RubricSettings                  string          `json:"rubric_settings"`
-	RubricSettings interface{} `json:"rubric_settings"`
+	PointsPossible          float64         `json:"points_possible" mapstructure:",omitempty"`
+	SubmissionTypes         []string        `json:"submission_types" mapstructure:",omitempty"`
+	HasSubmittedSubmissions bool            `json:"has_submitted_submissions" mapstructure:",omitempty"`
+	GradingType             string          `json:"grading_type" mapstructure:",omitempty"`
+	GradingStandardID       interface{}     `json:"grading_standard_id" mapstructure:",omitempty"`
+	Published               bool            `json:"published" mapstructure:",omitempty"`
+	Unpublishable           bool            `json:"unpublishable" mapstructure:",omitempty"`
+	LockedForUser           bool            `json:"locked_for_user" mapstructure:",omitempty"`
+	LockInfo                LockInfo        `json:"lock_info" mapstructure:",omitempty"`
+	LockExplanation         string          `json:"lock_explanation" mapstructure:",omitempty"`
+	QuizID                  int             `json:"quiz_id" mapstructure:",omitempty"`
+	AnonymousSubmissions    bool            `json:"anonymous_submissions" mapstructure:",omitempty"`
+	DiscussionTopic         DiscussionTopic `json:"discussion_topic" mapstructure:",omitempty"`
+	FreezeOnCopy            bool            `json:"freeze_on_copy" mapstructure:",omitempty"`
+	Frozen                  bool            `json:"frozen" mapstructure:",omitempty"`
+	FrozenAttributes        []string        `json:"frozen_attributes" mapstructure:",omitempty"`
+	UseRubricForGrading     bool            `json:"use_rubric_for_grading" mapstructure:",omitempty"`
+	Submission              interface{}     `json:"submission" mapstructure:",omitempty"` // TODO: create a Submission struct and set this type to that
 
-	Rubric []RubricCriteria `json:"rubric"`
+	RubricSettings interface{}      `json:"rubric_settings" mapstructure:",omitempty"`
+	Rubric         []RubricCriteria `json:"rubric" mapstructure:",omitempty"`
 
-	AssignmentVisibility            []int       `json:"assignment_visibility"`
-	Overrides                       interface{} `json:"overrides"`
-	OmitFromFinalGrade              bool        `json:"omit_from_final_grade"`
-	ModeratedGrading                bool        `json:"moderated_grading"`
-	GraderCount                     int         `json:"grader_count"`
-	FinalGraderID                   int         `json:"final_grader_id"`
-	GraderCommentsVisibleToGraders  bool        `json:"grader_comments_visible_to_graders"`
-	GradersAnonymousToGraders       bool        `json:"graders_anonymous_to_graders"`
-	GraderNamesVisibleToFinalGrader bool        `json:"grader_names_visible_to_final_grader"`
-	AnonymousGrading                bool        `json:"anonymous_grading"`
-	AllowedAttempts                 int         `json:"allowed_attempts"`
-	PostManually                    bool        `json:"post_manually"`
+	AssignmentVisibility            []int `json:"assignment_visibility" mapstructure:",omitempty"`
+	OmitFromFinalGrade              bool  `json:"omit_from_final_grade" mapstructure:",omitempty"`
+	ModeratedGrading                bool  `json:"moderated_grading" mapstructure:",omitempty"`
+	GraderCount                     int   `json:"grader_count" mapstructure:",omitempty"`
+	FinalGraderID                   int   `json:"final_grader_id" mapstructure:",omitempty"`
+	GraderCommentsVisibleToGraders  bool  `json:"grader_comments_visible_to_graders" mapstructure:",omitempty"`
+	GradersAnonymousToGraders       bool  `json:"graders_anonymous_to_graders" mapstructure:",omitempty"`
+	GraderNamesVisibleToFinalGrader bool  `json:"grader_names_visible_to_final_grader" mapstructure:",omitempty"`
+	AnonymousGrading                bool  `json:"anonymous_grading" mapstructure:",omitempty"`
+	AllowedAttempts                 int   `json:"allowed_attempts" mapstructure:",omitempty"`
+	PostManually                    bool  `json:"post_manually" mapstructure:",omitempty"`
 }
 
 // TurnitinSettings is a settings struct for turnitin
@@ -281,8 +309,7 @@ type RubricCriteria struct {
 	Description       string  `json:"description"`
 	LongDescription   string  `json:"long_description"`
 	CriterionUseRange bool    `json:"criterion_use_range"`
-	// Ratings           []interface{} `json:"ratings"`
-	Ratings []struct {
+	Ratings           []struct {
 		ID              string  `json:"id"`
 		Description     string  `json:"description"`
 		LongDescription string  `json:"long_description"`
@@ -293,11 +320,26 @@ type RubricCriteria struct {
 
 // LockInfo is a struct containing assignment lock status.
 type LockInfo struct {
-	AssetString    string `json:"asset_string"`
-	UnlockAt       string `json:"unlock_at"`
-	LockAt         string `json:"lock_at"`
-	ContextModule  string `json:"context_module"`
-	ManuallyLocked bool   `json:"manually_locked"`
+	AssetString    string    `json:"asset_string"`
+	UnlockAt       time.Time `json:"unlock_at"`
+	LockAt         time.Time `json:"lock_at"`
+	ContextModule  string    `json:"context_module"`
+	ManuallyLocked bool      `json:"manually_locked"`
+}
+
+// AssignmentOverride is an assignment override object
+type AssignmentOverride struct {
+	ID              int       `json:"id"`
+	AssignmentID    int       `json:"assignment_id"`
+	StudentIds      []int     `json:"student_ids"`
+	GroupID         int       `json:"group_id"`
+	CourseSectionID int       `json:"course_section_id"`
+	Title           string    `json:"title"`
+	DueAt           time.Time `json:"due_at"`
+	AllDay          bool      `json:"all_day"`
+	AllDayDate      time.Time `json:"all_day_date"`
+	UnlockAt        time.Time `json:"unlock_at"`
+	LockAt          time.Time `json:"lock_at"`
 }
 
 // Activity returns a course's activity data
@@ -393,10 +435,10 @@ type Term struct {
 
 // CourseProgress is the progress through a course.
 type CourseProgress struct {
-	RequirementCount          int    `json:"requirement_count"`
-	RequirementCompletedCount int    `json:"requirement_completed_count"`
-	NextRequirementURL        string `json:"next_requirement_url"`
-	CompletedAt               string `json:"completed_at"`
+	RequirementCount          int       `json:"requirement_count"`
+	RequirementCompletedCount int       `json:"requirement_completed_count"`
+	NextRequirementURL        string    `json:"next_requirement_url"`
+	CompletedAt               time.Time `json:"completed_at"`
 }
 
 // Enrollment is an enrollment object
@@ -493,9 +535,9 @@ func getQuiz(client doer, course, quiz int, opts []Option) (*Quiz, error) {
 type Quiz struct {
 	ID       int       `json:"id"`
 	Title    string    `json:"title"`
-	DueAt    string    `json:"due_at"`
+	DueAt    time.Time `json:"due_at"`
 	LockAt   time.Time `json:"lock_at"`
-	UnlockAt string    `json:"unlock_at"`
+	UnlockAt time.Time `json:"unlock_at"`
 
 	HTMLURL                       string          `json:"html_url"`
 	MobileURL                     string          `json:"mobile_url"`
@@ -648,4 +690,23 @@ type assignmentChan chan *Assignment
 
 func (ac assignmentChan) Close() {
 	close(ac)
+}
+
+func timeToStringDecodeFunc(format string) mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+		// fmt.Printf("%T %v\n", data, data)
+		// fmt.Printf("%T %v\n", f, f)
+		// fmt.Println(f != reflect.TypeOf(&time.Time{}))
+
+		if f != reflect.TypeOf(&time.Time{}) {
+			return data, nil
+		}
+		// fmt.Println(t.Kind() != reflect.String, t)
+		// fmt.Printf("%T\n", data)
+		// if t.Kind() != reflect.String {
+		// 	return data, nil
+		// }
+		date := data.(*time.Time)
+		return date.Format(format), nil
+	}
 }
