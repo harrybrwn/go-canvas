@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -420,6 +421,7 @@ func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
 }
 
 // Folders will retrieve the course's folders.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.list_all_folders
 func (c *Course) Folders(opts ...Option) <-chan *Folder {
 	ch := make(folderChan)
 	pager := c.folderspager(ch, opts)
@@ -428,6 +430,7 @@ func (c *Course) Folders(opts ...Option) <-chan *Folder {
 }
 
 // Folder will the a folder from the course given a folder id.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.show
 func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 	f := &Folder{client: c.client}
 	path := fmt.Sprintf("courses/%d/folders/%d", c.ID, id)
@@ -435,6 +438,7 @@ func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 }
 
 // ListFolders returns a slice of folders for the course.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.list_all_folders
 func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
 	ch := make(chan *Folder)
 	p := c.folderspager(ch, opts)
@@ -449,6 +453,13 @@ func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
 			return folders, err
 		}
 	}
+}
+
+// CreateFolder will create a new folder
+// https://canvas.instructure.com/doc/api/files.html#method.folders.create
+func (c *Course) CreateFolder(path string, opts ...Option) (*Folder, error) {
+	dir, name := filepath.Split(path)
+	return createFolder(c.client, dir, name, opts, "courses/%d/folders", c.ID)
 }
 
 // SetErrorHandler will set a error handling callback that is

@@ -303,6 +303,17 @@ func TestCourseFiles_Err(t *testing.T) {
 	c.errorHandler = defaultErrorHandler
 }
 
+func TestCreateFolder(t *testing.T) {
+	c := testCourse()
+	f, err := c.CreateFolder("/test_folder", IncludeOpt("user"))
+	if err != nil {
+		t.Error(err)
+	}
+	if err = f.Delete(); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestCourse_Settings(t *testing.T) {
 	c := testCourse()
 	settings, err := c.Settings()
@@ -495,6 +506,19 @@ func TestOptions(t *testing.T) {
 			t.Error("should contain the prefix")
 		}
 	}
+	options := optEnc{
+		IncludeOpt("user"),
+		IncludeOpt("another"),
+	}
+	if options.Encode() != "include%5B%5D=user&include%5B%5D=another" {
+		t.Error("got wrong encoded value")
+	}
+	if (optEnc{}).Encode() != "" {
+		t.Error("empty options should have empty encoded value")
+	}
+	o = UserOpt("key", "value")
+	is.Equal(o.Name(), "user[key]")
+	is.Equal(o.Value(), []string{"value"})
 }
 
 func deauthorize(d doer) func() {

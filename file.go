@@ -4,10 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 )
 
+// FileType is a generic interface for filesystem objects
+type FileType interface {
+	GetID() int
+	Name() string
+	ParentFolder() (*Folder, error)
+	Delete(...Option) error
+}
+
 // File is a file
+// https://canvas.instructure.com/doc/api/files.html
 type File struct {
 	ID       int    `json:"id"`
 	FolderID int    `json:"folder_id"`
@@ -41,6 +51,16 @@ type File struct {
 	folder *Folder
 }
 
+// Name returns the file's filename
+func (f *File) Name() string {
+	return f.Filename
+}
+
+// GetID is for the FileType interface
+func (f *File) GetID() int {
+	return f.ID
+}
+
 // ParentFolder will get the folder that the file is a part of.
 func (f *File) ParentFolder() (*Folder, error) {
 	if f.folder != nil && f.folder.ID == f.FolderID {
@@ -69,11 +89,21 @@ func (f *File) PublicURL() (string, error) {
 	return u.(string), nil
 }
 
+// Delete the file.
+// https://canvas.instructure.com/doc/api/files.html#method.files.destroy
+func (f *File) Delete(opts ...Option) error {
+	resp, err := delete(f.client, fmt.Sprintf("/files/%d", f.ID), asParams(opts))
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}
+
 // Folder is a folder
 type Folder struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	FullName string `json:"full_name"`
+	ID         int    `json:"id"`
+	Foldername string `json:"name"`
+	FullName   string `json:"full_name"`
 
 	FilesURL   string `json:"files_url"`
 	FoldersURL string `json:"folders_url"`
@@ -100,6 +130,16 @@ type Folder struct {
 	parent *Folder
 }
 
+// Name returns the folder's name
+func (f *Folder) Name() string {
+	return f.Foldername
+}
+
+// GetID will return the folder id, this is only here for interfaces.
+func (f *Folder) GetID() int {
+	return f.ID
+}
+
 // ParentFolder will get the folder's parent folder.
 func (f *Folder) ParentFolder() (*Folder, error) {
 	if f.parent != nil {
@@ -110,6 +150,7 @@ func (f *Folder) ParentFolder() (*Folder, error) {
 }
 
 // File gets a file by id.
+// https://canvas.instructure.com/doc/api/files.html#method.files.api_show
 func (f *Folder) File(id int, opts ...Option) (*File, error) {
 	file := &File{client: f.client}
 	return file, getjson(f.client, file, asParams(opts), "files/%d", id)
@@ -117,6 +158,7 @@ func (f *Folder) File(id int, opts ...Option) (*File, error) {
 
 // Files will return a channel that sends all of the files
 // in the folder.
+// https://canvas.instructure.com/doc/api/files.html#method.files.api_index
 func (f *Folder) Files() <-chan *File {
 	ch := make(fileChan)
 	pages := newPaginatedList(
@@ -128,6 +170,7 @@ func (f *Folder) Files() <-chan *File {
 }
 
 // Folders will return a channel that sends all of the sub-folders.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.api_index
 func (f *Folder) Folders() <-chan *Folder {
 	ch := make(folderChan)
 	pages := newPaginatedList(
@@ -137,6 +180,50 @@ func (f *Folder) Folders() <-chan *Folder {
 	go handleErrs(pages.start(), ch, ConcurrentErrorHandler)
 	return ch
 }
+
+// CreateFolder creates a new folder as a subfolder of the current one.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.create
+func (f *Folder) CreateFolder(path string, opts ...Option) (*Folder, error) {
+	dir, name := filepath.Split(path)
+	return createFolder(f.client, dir, name, opts, "/folders/%d/folders", f.ID)
+}
+
+// Delete the folder
+// https://canvas.instructure.com/doc/api/files.html#method.folders.api_destroy
+func (f *Folder) Delete(opts ...Option) error {
+	resp, err := delete(f.client, fmt.Sprintf("/folders/%d", f.ID), asParams(opts))
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}
+
+// https://canvas.instructure.com/doc/api/files.html#method.folders.create
+func createFolder(d doer, path, name string, opts []Option, respath string, v ...interface{}) (*Folder, error) {
+	parentpath, name := filepath.Split(path)
+	q := params{"name": {name}}
+	if parentpath != "" {
+		q["parent_folder_path"] = []string{parentpath}
+	}
+	for _, o := range opts {
+		if _, ok := q[o.Name()]; !ok {
+			q[o.Name()] = o.Value()
+		}
+	}
+
+	resp, err := post(d, fmt.Sprintf(respath, v...), q)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	f := &Folder{client: d}
+	return f, json.NewDecoder(resp.Body).Decode(f)
+}
+
+var (
+	_ FileType = (*File)(nil)
+	_ FileType = (*Folder)(nil)
+)
 
 type fileChan chan *File
 

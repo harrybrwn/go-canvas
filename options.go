@@ -2,6 +2,8 @@ package canvas
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -135,4 +137,23 @@ func (ao *arropt) Name() string {
 
 func (ao *arropt) Value() []string {
 	return ao.vals
+}
+
+// Encodable options
+type optEnc []Option
+
+func (oe optEnc) Encode() string {
+	if len(oe) == 0 {
+		return ""
+	}
+	var buf strings.Builder
+	for _, o := range oe {
+		if buf.Len() > 0 {
+			buf.WriteByte('&')
+		}
+		buf.WriteString(url.QueryEscape(o.Name()))
+		buf.WriteByte('=')
+		buf.WriteString(url.QueryEscape(strings.Join(o.Value(), ",")))
+	}
+	return buf.String()
 }

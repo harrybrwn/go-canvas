@@ -8,12 +8,8 @@ import (
 	"time"
 )
 
-func asParams(opts []Option) params {
-	p := params{}
-	for _, o := range opts {
-		p[o.Name()] = o.Value()
-	}
-	return p
+func asParams(opts []Option) encoder {
+	return optEnc(opts)
 }
 
 type params map[string][]string

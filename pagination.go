@@ -17,7 +17,7 @@ type sendFunc func(io.Reader) error
 func newPaginatedList(
 	d doer,
 	path string,
-	send func(io.Reader) error,
+	send sendFunc,
 	parameters []Option,
 ) *paginated {
 	if parameters == nil {
@@ -38,7 +38,7 @@ type paginated struct {
 	path string
 	opts []Option
 	do   doer
-	send func(io.Reader) error
+	send sendFunc
 
 	perpage int
 	errs    chan error

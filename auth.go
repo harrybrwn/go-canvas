@@ -49,6 +49,8 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 		e = &AuthError{}
 	case http.StatusBadRequest:
 		e = &Error{}
+	case http.StatusUnprocessableEntity:
+		return nil, errs.Pair(resp.Body.Close(), errs.New(resp.Status))
 	}
 	return nil, errs.Chain(e, json.NewDecoder(resp.Body).Decode(&e), resp.Body.Close())
 }
@@ -100,17 +102,6 @@ func newV1Req(method, urlpath, query string) *http.Request {
 	}
 }
 
-func newLtiReq(method, urlpath, query string) *http.Request {
-	return &http.Request{
-		Method: method,
-		Proto:  "HTTP/1.1",
-		URL: &url.URL{
-			Path:     path.Join("/api/lti", urlpath),
-			RawQuery: query,
-		},
-	}
-}
-
 func getjson(client doer, obj interface{}, vals encoder, path string, v ...interface{}) error {
 	resp, err := get(client, fmt.Sprintf(path, v...), vals)
 	if err != nil {
@@ -141,27 +132,6 @@ func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Scheme = "https"
 	req.URL.Host = a.host
 	return a.rt.RoundTrip(req)
-}
-
-func newLTIClient(d doer) *ltiClient {
-	switch c := d.(type) {
-	case *http.Client:
-		return &ltiClient{client: *c}
-	case *client:
-		return &ltiClient{client: c.Client}
-	case *ltiClient:
-		return &ltiClient{client: c.client}
-	default:
-		panic("unknown doer type")
-	}
-}
-
-type ltiClient struct {
-	client http.Client
-}
-
-func (lti *ltiClient) Do(r *http.Request) (*http.Response, error) {
-	return lti.client.Do(r)
 }
 
 func checkErrors(errs []errorMsg) string {

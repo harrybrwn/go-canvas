@@ -175,6 +175,5 @@ func (u *User) SetColor(asset, hexcode string) error {
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
-	return nil
+	return resp.Body.Close()
 }
