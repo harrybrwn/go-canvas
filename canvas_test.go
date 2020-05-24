@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/harrybrwn/errs"
 	"github.com/matryer/is"
 )
 
@@ -64,6 +65,7 @@ func testCourses() ([]*Course, error) {
 func Test(t *testing.T) {
 }
 func TestAssignments(t *testing.T) {
+	is := is.New(t)
 	c := testCourse()
 	i := 0
 	for ass := range c.Assignments() {
@@ -77,10 +79,13 @@ func TestAssignments(t *testing.T) {
 		t.Error("should have one assignment")
 	}
 
-	newass, err := c.CreateAssignment(Opt("assignment[name]", "created assignment"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	// tm := time.Now()
+	newass, err := c.CreateAssignment(Assignment{
+		Name:        "runtime test assignment",
+		Description: "this is a test assignment that has been generated durning testing",
+		// DueAt:       &tm,
+	})
+	is.NoErr(err)
 	if newass == nil {
 		t.Fatal("new assignment is nil")
 	}
@@ -89,17 +94,15 @@ func TestAssignments(t *testing.T) {
 	}
 
 	asses, err := c.ListAssignments(IncludeOpt("overrides"))
-	if err != nil {
-		t.Error(err)
-	}
+	is.NoErr(err)
 	if len(asses) != 2 {
 		t.Error("should have one assignment")
 	}
-
-	_, err = c.DeleteAssignmentByID(newass.ID)
-	if err != nil {
-		t.Error(err)
-	}
+	a, err := c.EditAssignment(&Assignment{ID: newass.ID, Name: "edited"})
+	is.NoErr(err)
+	is.Equal(a.Name, "edited")
+	is.NoErr(errs.Eat(c.Assignment(newass.ID))) // i don't even need to test this but it makes my coverage better lol
+	is.NoErr(errs.Eat(c.DeleteAssignment(newass)))
 }
 
 func TestSetHost(t *testing.T) {
