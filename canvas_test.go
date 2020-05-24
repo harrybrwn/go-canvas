@@ -64,6 +64,7 @@ func testCourses() ([]*Course, error) {
 
 func Test(t *testing.T) {
 }
+
 func TestAssignments(t *testing.T) {
 	is := is.New(t)
 	c := testCourse()
@@ -79,11 +80,11 @@ func TestAssignments(t *testing.T) {
 		t.Error("should have one assignment")
 	}
 
-	// tm := time.Now()
+	tm := time.Now()
 	newass, err := c.CreateAssignment(Assignment{
 		Name:        "runtime test assignment",
 		Description: "this is a test assignment that has been generated durning testing",
-		// DueAt:       &tm,
+		DueAt:       &tm,
 	})
 	is.NoErr(err)
 	if newass == nil {
@@ -145,7 +146,7 @@ func TestCanvas_Err(t *testing.T) {
 		if err == nil {
 			t.Error("expected an error")
 		}
-		courses, err := c.ActiveCourses()
+		courses, err := c.Courses(OptActiveCourses)
 		if err == nil {
 			t.Error("expected an error")
 		}
@@ -223,6 +224,14 @@ func TestCourse_Files(t *testing.T) {
 			is.True(file.ID != 0)
 		}
 	})
+
+	u, err := file.PublicURL()
+	if err != nil {
+		t.Error(err)
+	}
+	if u == "" {
+		t.Error("should have gotten a url")
+	}
 
 	t.Run("Course.Folders", func(t *testing.T) {
 		is := is.New(t)

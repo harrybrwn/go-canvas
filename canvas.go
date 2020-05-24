@@ -29,7 +29,7 @@ var (
 
 func init() {
 	token := os.Getenv("CANVAS_TOKEN")
-	defaultCanvas = New(token)
+	SetToken(token)
 }
 
 // SetToken will set the package level canvas object token.
@@ -86,37 +86,6 @@ func GetCourse(id int, opts ...Option) (*Course, error) { return defaultCanvas.G
 func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
 	course := &Course{client: c.client}
 	return course, getjson(c.client, &course, asParams(opts), "/courses/%d", id)
-}
-
-// GetCourse will get a course given a course id.
-// func GetCourse(id int, opts ...Option) (*Course, error) {
-//	return defaultCanvas.GetCourse(id, opts...)
-// }
-
-// ActiveCourses returns a list of only the courses that are
-// currently active
-func (c *Canvas) ActiveCourses(opts ...Option) ([]*Course, error) {
-	p := params{"enrollment_state": {"active"}}
-	p.Add(opts...)
-	return getCourses(c.client, "/courses", p)
-}
-
-// ActiveCourses returns a list of only the courses that are
-// currently active
-func ActiveCourses(opts ...Option) ([]*Course, error) { return defaultCanvas.ActiveCourses(opts...) }
-
-// CompletedCourses returns a list of only the courses that are
-// not currently active and have been completed
-func (c *Canvas) CompletedCourses(opts ...Option) ([]*Course, error) {
-	p := params{"enrollment_state": {"completed"}, "per_page": {"100"}}
-	p.Add(opts...)
-	return getCourses(c.client, "/courses", p)
-}
-
-// CompletedCourses returns a list of only the courses that are
-// not currently active and have been completed
-func CompletedCourses(opts ...Option) ([]*Course, error) {
-	return defaultCanvas.CompletedCourses(opts...)
 }
 
 // GetUser will return a user object given that user's ID.

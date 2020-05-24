@@ -1,6 +1,8 @@
 package canvas
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -47,6 +49,24 @@ func (f *File) ParentFolder() (*Folder, error) {
 	f.folder = &Folder{client: f.client}
 	err := getjson(f.client, f.folder, nil, "folders/%d", f.FolderID)
 	return f.folder, err
+}
+
+// PublicURL will get the file's public url.
+func (f *File) PublicURL() (string, error) {
+	resp, err := get(f.client, fmt.Sprintf("/files/%d/public_url", f.ID), nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	m := make(map[string]interface{})
+	if err = json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		return "", err
+	}
+	u, ok := m["public_url"]
+	if !ok {
+		return "", errors.New("could not find public url")
+	}
+	return u.(string), nil
 }
 
 // Folder is a folder

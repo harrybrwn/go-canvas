@@ -11,6 +11,15 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+var (
+	// OptCompletedCourses is an option for getting completed courses
+	OptCompletedCourses Option = Opt("enrollment_state", "completed")
+	// OptActiveCourses is an option for getting only active courses
+	OptActiveCourses Option = Opt("enrollment_state", "active")
+	// OptInvitedOrPendingCourses is an option for getting pending courses
+	OptInvitedOrPendingCourses Option = Opt("enrollment_state", "invited_or_pending")
+)
+
 // Course represents a canvas course.
 type Course struct {
 	ID                   int       `json:"id"`
@@ -309,7 +318,8 @@ type Assignment struct {
 	Frozen                  bool             `json:"frozen" mapstructure:",omitempty"`
 	FrozenAttributes        []string         `json:"frozen_attributes" mapstructure:",omitempty"`
 	UseRubricForGrading     bool             `json:"use_rubric_for_grading" mapstructure:",omitempty"`
-	Submission              interface{}      `json:"submission" mapstructure:",omitempty"` // TODO: create a Submission struct and set this type to that
+	// TODO: create a Submission struct and set this type to that
+	Submission interface{} `json:"submission" mapstructure:",omitempty"`
 
 	RubricSettings interface{}      `json:"rubric_settings" mapstructure:",omitempty"`
 	Rubric         []RubricCriteria `json:"rubric" mapstructure:",omitempty"`
@@ -382,8 +392,7 @@ type AssignmentOverride struct {
 }
 
 // Activity returns a course's activity data
-func (c *Course) Activity() (interface{}, error) {
-	var res interface{}
+func (c *Course) Activity() (res interface{}, err error) {
 	return res, getjson(c.client, &res, nil, "/courses/%d/analytics/activity", c.ID)
 }
 

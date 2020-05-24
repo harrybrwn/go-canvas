@@ -12,8 +12,6 @@ import (
 	"github.com/harrybrwn/errs"
 )
 
-type pageInitFunction func(int, io.Reader) ([]interface{}, error)
-
 type sendFunc func(io.Reader) error
 
 func newPaginatedList(
@@ -54,6 +52,9 @@ type closable interface {
 
 type errorHandlerFunc func(error) error
 
+// Possible bug: ok so this function should be run in a sperate goroutine. When an
+// error is found and the send channel 'ch' is closed, some objects may be sent
+// on the channel after it is closed because it was closed in a seperate goroutine.
 func handleErrs(errs <-chan error, ch closable, handle errorHandlerFunc) {
 	var err error
 	for {
@@ -72,7 +73,7 @@ func handleErrs(errs <-chan error, ch closable, handle errorHandlerFunc) {
 				continue // don't stop just for one error
 			}
 		Stop:
-			ch.Close()
+			ch.Close() // ch should be a chan wrapped in a type
 			return
 		}
 	}
@@ -103,19 +104,20 @@ func (p *paginated) start() <-chan error {
 	p.wg.Add(n)
 
 	go func() {
-		defer resp.Body.Close()
-		defer p.wg.Done()
 		if err = p.send(resp.Body); err != nil {
 			p.errs <- err
 		}
+		resp.Body.Close()
+		p.wg.Done()
 	}()
+	// already made a request for page 1, so start on 2
 	for page := 2; page <= n; page++ {
 		go func(page int) {
 			defer p.wg.Done()
 			resp, err := get(p.do, p.path, p.getQuery(page))
 			if err != nil {
 				p.errs <- err
-				return
+				return // stop bc we won't have data to send
 			}
 			if err = p.send(resp.Body); err != nil {
 				p.errs <- err

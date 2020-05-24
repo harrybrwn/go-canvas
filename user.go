@@ -1,11 +1,8 @@
 package canvas
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/harrybrwn/errs"
 )
 
 // User is a canvas user
@@ -178,7 +175,6 @@ func (u *User) SetColor(asset, hexcode string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	e := &AuthError{}
-	return errs.Pair(json.NewDecoder(resp.Body).Decode(e), e)
+	resp.Body.Close()
+	return nil
 }
