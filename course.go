@@ -11,15 +11,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-var (
-	// OptCompletedCourses is an option for getting completed courses
-	OptCompletedCourses Option = Opt("enrollment_state", "completed")
-	// OptActiveCourses is an option for getting only active courses
-	OptActiveCourses Option = Opt("enrollment_state", "active")
-	// OptInvitedOrPendingCourses is an option for getting pending courses
-	OptInvitedOrPendingCourses Option = Opt("enrollment_state", "invited_or_pending")
-)
-
 // Course represents a canvas course.
 type Course struct {
 	ID                   int       `json:"id"`
@@ -301,28 +292,29 @@ type Assignment struct {
 
 	NotifyOfUpdate bool `json:"notify_of_update,omitempty" mapstructure:"assignment[notify_of_update],omitempty"`
 
-	PointsPossible          float64          `json:"points_possible" mapstructure:"assignment[points_possible],omitempty"`
-	SubmissionTypes         []string         `json:"submission_types" mapstructure:"assignment[submission_types][],omitempty"`
-	HasSubmittedSubmissions bool             `json:"has_submitted_submissions" mapstructure:",omitempty"`
-	GradingType             string           `json:"grading_type" mapstructure:"assignment[grading_type],omitempty"`
-	GradingStandardID       interface{}      `json:"grading_standard_id" mapstructure:"assignment[grading_standard_id],omitempty"`
-	Published               bool             `json:"published" mapstructure:"assignment[published],omitempty"`
-	Unpublishable           bool             `json:"unpublishable" mapstructure:",omitempty"`
-	LockedForUser           bool             `json:"locked_for_user" mapstructure:",omitempty"`
-	LockInfo                *LockInfo        `json:"lock_info" mapstructure:",omitempty"`
-	LockExplanation         string           `json:"lock_explanation" mapstructure:",omitempty"`
-	QuizID                  int              `json:"quiz_id" mapstructure:",omitempty"`
-	AnonymousSubmissions    bool             `json:"anonymous_submissions" mapstructure:",omitempty"`
-	DiscussionTopic         *DiscussionTopic `json:"discussion_topic" mapstructure:",omitempty"`
-	FreezeOnCopy            bool             `json:"freeze_on_copy" mapstructure:",omitempty"`
-	Frozen                  bool             `json:"frozen" mapstructure:",omitempty"`
-	FrozenAttributes        []string         `json:"frozen_attributes" mapstructure:",omitempty"`
-	UseRubricForGrading     bool             `json:"use_rubric_for_grading" mapstructure:",omitempty"`
-	// TODO: create a Submission struct and set this type to that
-	Submission interface{} `json:"submission" mapstructure:",omitempty"`
+	PointsPossible          float64     `json:"points_possible" mapstructure:"assignment[points_possible],omitempty"`
+	SubmissionTypes         []string    `json:"submission_types" mapstructure:"assignment[submission_types][],omitempty"`
+	HasSubmittedSubmissions bool        `json:"has_submitted_submissions" mapstructure:",omitempty"`
+	GradingType             string      `json:"grading_type" mapstructure:"assignment[grading_type],omitempty"`
+	GradingStandardID       interface{} `json:"grading_standard_id" mapstructure:"assignment[grading_standard_id],omitempty"`
+	Published               bool        `json:"published" mapstructure:"assignment[published],omitempty"`
+	Unpublishable           bool        `json:"unpublishable" mapstructure:",omitempty"`
 
-	RubricSettings interface{}      `json:"rubric_settings" mapstructure:",omitempty"`
-	Rubric         []RubricCriteria `json:"rubric" mapstructure:",omitempty"`
+	LockedForUser   bool      `json:"locked_for_user" mapstructure:",omitempty"`
+	LockInfo        *LockInfo `json:"lock_info" mapstructure:",omitempty"`
+	LockExplanation string    `json:"lock_explanation" mapstructure:",omitempty"`
+
+	QuizID               int              `json:"quiz_id" mapstructure:",omitempty"`
+	AnonymousSubmissions bool             `json:"anonymous_submissions" mapstructure:",omitempty"`
+	DiscussionTopic      *DiscussionTopic `json:"discussion_topic" mapstructure:",omitempty"`
+	FreezeOnCopy         bool             `json:"freeze_on_copy" mapstructure:",omitempty"`
+	Frozen               bool             `json:"frozen" mapstructure:",omitempty"`
+	FrozenAttributes     []string         `json:"frozen_attributes" mapstructure:",omitempty"`
+	Submission           *Submission      `json:"submission" mapstructure:",omitempty"`
+
+	UseRubricForGrading bool             `json:"use_rubric_for_grading" mapstructure:",omitempty"`
+	RubricSettings      interface{}      `json:"rubric_settings" mapstructure:",omitempty"`
+	Rubric              []RubricCriteria `json:"rubric" mapstructure:",omitempty"`
 
 	AssignmentVisibility            []int `json:"assignment_visibility" mapstructure:",omitempty"`
 	OmitFromFinalGrade              bool  `json:"omit_from_final_grade" mapstructure:"assignment[omit_from_final_grade],omitempty"`

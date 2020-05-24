@@ -5,6 +5,26 @@ import (
 	"time"
 )
 
+var (
+	// CompletedCourses is an option for getting completed courses
+	CompletedCourses Option = Opt("enrollment_state", "completed")
+	// ActiveCourses is an option for getting only active courses
+	ActiveCourses Option = Opt("enrollment_state", "active")
+	// InvitedOrPendingCourses is an option for getting pending courses
+	InvitedOrPendingCourses Option = Opt("enrollment_state", "invited_or_pending")
+
+	// OptTeacher is the teacher enrollment option.
+	OptTeacher Option = Opt("enrollment_type", "teacher")
+	// OptStudent is the student enrollment option.
+	OptStudent Option = Opt("enrollment_type", "student")
+	// OptTA is the TA enrollment option.
+	OptTA Option = Opt("enrollment_type", "ta")
+	// OptObserver is the enrollment option for observers.
+	OptObserver Option = Opt("enrollment_type", "observer")
+	// OptDesigner is the enrollment option for designers
+	OptDesigner Option = Opt("enrollment_type", "designer")
+)
+
 // Option is a key value pair used
 // for api parameters. see Opt
 type Option interface {

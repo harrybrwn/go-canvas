@@ -146,7 +146,7 @@ func TestCanvas_Err(t *testing.T) {
 		if err == nil {
 			t.Error("expected an error")
 		}
-		courses, err := c.Courses(OptActiveCourses)
+		courses, err := c.Courses(ActiveCourses)
 		if err == nil {
 			t.Error("expected an error")
 		}
