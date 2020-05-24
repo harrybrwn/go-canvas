@@ -88,7 +88,7 @@ type Course struct {
 	} `json:"blueprint_restrictions_by_object_type"`
 
 	client       doer
-	errorHandler func(error)
+	errorHandler errorHandlerFunc
 }
 
 // Settings gets the course settings
@@ -457,7 +457,7 @@ func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
 // The callback should accept an error and a quit channel.
 // If a value is sent on the quit channel, whatever secsion of
 // code is receiving the channel will end gracefully.
-func (c *Course) SetErrorHandler(f func(error)) {
+func (c *Course) SetErrorHandler(f errorHandlerFunc) {
 	c.errorHandler = f
 }
 
@@ -479,12 +479,13 @@ type CourseProgress struct {
 
 // Enrollment is an enrollment object
 type Enrollment struct {
-	ID                             int         `json:"id"`
-	CourseID                       int         `json:"course_id"`
+	ID                   int    `json:"id"`
+	CourseID             int    `json:"course_id"`
+	CourseIntegrationID  string `json:"course_integration_id"`
+	CourseSectionID      int    `json:"course_section_id"`
+	SectionIntegrationID string `json:"section_integration_id"`
+
 	SisCourseID                    string      `json:"sis_course_id"`
-	CourseIntegrationID            string      `json:"course_integration_id"`
-	CourseSectionID                int         `json:"course_section_id"`
-	SectionIntegrationID           string      `json:"section_integration_id"`
 	SisAccountID                   string      `json:"sis_account_id"`
 	SisSectionID                   string      `json:"sis_section_id"`
 	SisUserID                      string      `json:"sis_user_id"`
@@ -497,15 +498,17 @@ type Enrollment struct {
 	AssociatedUserID               interface{} `json:"associated_user_id"`
 	Role                           string      `json:"role"`
 	RoleID                         int         `json:"role_id"`
-	CreatedAt                      time.Time   `json:"created_at"`
-	UpdatedAt                      time.Time   `json:"updated_at"`
-	StartAt                        time.Time   `json:"start_at"`
-	EndAt                          time.Time   `json:"end_at"`
-	LastActivityAt                 time.Time   `json:"last_activity_at"`
-	LastAttendedAt                 time.Time   `json:"last_attended_at"`
-	TotalActivityTime              int         `json:"total_activity_time"`
-	HTMLURL                        string      `json:"html_url"`
-	Grades                         struct {
+
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	StartAt           time.Time `json:"start_at"`
+	EndAt             time.Time `json:"end_at"`
+	LastActivityAt    time.Time `json:"last_activity_at"`
+	LastAttendedAt    time.Time `json:"last_attended_at"`
+	TotalActivityTime int       `json:"total_activity_time"`
+
+	HTMLURL string `json:"html_url"`
+	Grades  struct {
 		HTMLURL              string  `json:"html_url"`
 		CurrentScore         string  `json:"current_score"`
 		CurrentGrade         string  `json:"current_grade"`
@@ -516,12 +519,7 @@ type Enrollment struct {
 		UnpostedCurrentScore string  `json:"unposted_current_score"`
 		UnpostedFinalScore   string  `json:"unposted_final_score"`
 	} `json:"grades"`
-	User struct {
-		ID           int    `json:"id"`
-		Name         string `json:"name"`
-		SortableName string `json:"sortable_name"`
-		ShortName    string `json:"short_name"`
-	} `json:"user"`
+	User                              *User   `json:"user"`
 	OverrideGrade                     string  `json:"override_grade"`
 	OverrideScore                     float64 `json:"override_score"`
 	UnpostedCurrentGrade              string  `json:"unposted_current_grade"`
@@ -709,7 +707,7 @@ func sendUserFunc(d doer, ch chan *User) sendFunc {
 	}
 }
 
-func defaultErrorHandler(err error) {
+func defaultErrorHandler(err error) error {
 	panic(err)
 }
 
@@ -726,6 +724,5 @@ func timeToStringDecodeFunc(format string) mapstructure.DecodeHookFunc {
 		}
 		date := data.(*time.Time)
 		return date.Format(format), nil
-		// fmt.Println(date.Format(format))
 	}
 }

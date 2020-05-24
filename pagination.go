@@ -52,13 +52,26 @@ type closable interface {
 	Close()
 }
 
-func handleErrs(errs <-chan error, ch closable, handle func(error)) {
+type errorHandlerFunc func(error) error
+
+func handleErrs(errs <-chan error, ch closable, handle errorHandlerFunc) {
+	var err error
 	for {
 		select {
 		case e := <-errs:
+			// If e is nil, the error channel has been closed and we stop
+			// otherwise we handle the error.
 			if e != nil {
-				handle(e)
+				// If the user defined error returns an error then we stop,
+				// if it returns nil, then the user wants to keep going and
+				// handle the error one their side.
+				err = handle(e)
+				if err != nil {
+					goto Stop
+				}
+				continue // don't stop just for one error
 			}
+		Stop:
 			ch.Close()
 			return
 		}

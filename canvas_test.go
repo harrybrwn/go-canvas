@@ -204,8 +204,9 @@ func TestCourse_Files(t *testing.T) {
 	is := is.New(t)
 	c := testCourse()
 
-	c.SetErrorHandler(func(e error) {
+	c.SetErrorHandler(func(e error) error {
 		t.Fatal(e)
+		return e
 	})
 	is.True(c.client != nil)
 
@@ -245,12 +246,13 @@ func TestCourseFiles_Err(t *testing.T) {
 	c := testCourse()
 
 	errorCount := 0
-	c.SetErrorHandler(func(e error) {
+	c.SetErrorHandler(func(e error) error {
 		if e == nil {
 			t.Error("expected an error")
 		} else {
 			errorCount++
 		}
+		return nil
 	})
 
 	t.Run("Files", func(t *testing.T) {

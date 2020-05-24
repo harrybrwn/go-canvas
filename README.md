@@ -11,3 +11,6 @@ A (very incomplete) api client for Instructure's Canvas API.
 ```
 go get github.com/harrybrwn/go-canvas
 ```
+
+## Getting Started
+Get a token from your canvas account, [this](https://community.canvaslms.com/docs/DOC-16005-42121018197) should help. Then either set a `$CANVAS_TOKEN` environment variable or using the `canvas.SetToken` or `canvas.New` functions.

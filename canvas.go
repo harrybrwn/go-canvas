@@ -14,7 +14,11 @@ var (
 
 	// ConcurrentErrorHandler is the error handling callback for
 	// handling errors in tricky goroutines.
-	ConcurrentErrorHandler func(error) = defaultErrorHandler
+	//
+	// If you do not want to stop all concurrent goroutines, this
+	// handler should return an non-nil error. If this handler returns
+	// nil then all goroutines will continue.
+	ConcurrentErrorHandler func(error) error = defaultErrorHandler
 
 	// DefaultUserAgent is the default user agent used to make requests.
 	DefaultUserAgent = "go-canvas"

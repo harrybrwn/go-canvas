@@ -64,8 +64,6 @@ func (p genericParam) Encode() string {
 			value = v
 		case []byte:
 			value = string(v)
-		case byte:
-			value = string(v)
 		case bool:
 			value = strconv.FormatBool(v)
 		case *time.Time:
