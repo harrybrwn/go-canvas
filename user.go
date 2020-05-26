@@ -42,17 +42,17 @@ func (u *User) Settings() (settings map[string]interface{}, err error) {
 
 // Courses will return the user's courses.
 func (u *User) Courses(opts ...Option) ([]*Course, error) {
-	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), asParams(opts))
+	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), optEnc(opts))
 }
 
 // CalendarEvents gets the user's calendar events.
 func (u *User) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
-	return cal, getjson(u.client, &cal, asParams(opts), "/users/%d/calendar_events", u.ID)
+	return cal, getjson(u.client, &cal, optEnc(opts), "/users/%d/calendar_events", u.ID)
 }
 
 // Bookmarks will get the user's bookmarks
 func (u *User) Bookmarks(opts ...Option) (bks []Bookmark, err error) {
-	return bks, getjson(u.client, &bks, asParams(opts), "users/%d/bookmarks", u.ID)
+	return bks, getjson(u.client, &bks, optEnc(opts), "users/%d/bookmarks", u.ID)
 }
 
 // CreateBookmark will create a bookmark

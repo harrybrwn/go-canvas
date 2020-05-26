@@ -3,8 +3,10 @@ package canvas
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -17,7 +19,7 @@ var (
 	//
 	// If you do not want to stop all concurrent goroutines, this
 	// handler should return an non-nil error. If this handler returns
-	// nil then all goroutines will continue.
+	// nil then all goroutines will continue if they can.
 	ConcurrentErrorHandler func(error) error = defaultErrorHandler
 
 	// DefaultUserAgent is the default user agent used to make requests.
@@ -76,7 +78,7 @@ func Courses(opts ...Option) ([]*Course, error) { return defaultCanvas.Courses(o
 // Courses lists all of the courses associated
 // with that canvas object.
 func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
-	return getCourses(c.client, "/courses", asParams(opts))
+	return getCourses(c.client, "/courses", optEnc(opts))
 }
 
 // GetCourse will get a course given a course id.
@@ -84,8 +86,8 @@ func GetCourse(id int, opts ...Option) (*Course, error) { return defaultCanvas.G
 
 // GetCourse will get a course given a course id.
 func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
-	course := &Course{client: c.client}
-	return course, getjson(c.client, &course, asParams(opts), "/courses/%d", id)
+	course := &Course{client: c.client, errorHandler: ConcurrentErrorHandler}
+	return course, getjson(c.client, &course, optEnc(opts), "/courses/%d", id)
 }
 
 // GetUser will return a user object given that user's ID.
@@ -112,6 +114,40 @@ func (c *Canvas) Todos() error {
 // Todos will get the current user's todo's.
 func Todos() error {
 	return defaultCanvas.Todos()
+}
+
+// Files will return a channel of all the default user's files.
+// https://canvas.instructure.com/doc/api/files.html#method.files.api_index
+func (c *Canvas) Files(opts ...Option) <-chan *File {
+	return filesChannel(c.client, "/users/self/files", ConcurrentErrorHandler, opts)
+}
+
+// Files will return a channel of all the default user's files.
+// https://canvas.instructure.com/doc/api/files.html#method.files.api_index
+func Files(opts ...Option) <-chan *File {
+	return defaultCanvas.Files(opts...)
+}
+
+// FolderPath will get a list of folders in the path given.
+func (c *Canvas) FolderPath(path string) ([]*Folder, error) {
+	path = filepath.Join("/users/self/folders/by_path", path)
+	return folderList(c.client, path)
+}
+
+// FolderPath will get a list of folders in the path given.
+func FolderPath(path string) ([]*Folder, error) {
+	return defaultCanvas.FolderPath(path)
+}
+
+// UploadFile uploads a file to the current user's files.
+func (c *Canvas) UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
+	path := fmt.Sprintf("/users/self/files")
+	return uploadFile(c.client, filename, r, path, opts)
+}
+
+// UploadFile uploads a file to the current user's files.
+func UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
+	return defaultCanvas.UploadFile(filename, r, opts...)
 }
 
 // CurrentAccount will get the current account.
@@ -168,11 +204,7 @@ type Account struct {
 
 // Courses returns the account's list of courses
 func (a *Account) Courses(opts ...Option) (courses []*Course, err error) {
-	return getCourses(
-		a.cli,
-		fmt.Sprintf("/accounts/%d/courses", a.ID),
-		asParams(opts),
-	)
+	return getCourses(a.cli, fmt.Sprintf("/accounts/%d/courses", a.ID), optEnc(opts))
 }
 
 // SearchAccounts will search for canvas accounts.
@@ -208,7 +240,7 @@ func Announcements(
 
 // CalendarEvents makes a call to get calendar events.
 func (c *Canvas) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
-	return cal, getjson(c.client, &cal, asParams(opts), "/calendar_events")
+	return cal, getjson(c.client, &cal, optEnc(opts), "/calendar_events")
 }
 
 // CalendarEvents makes a call to get calendar events.
@@ -296,7 +328,7 @@ type CalendarEvent struct {
 
 // Conversations returns a list of conversations
 func (c *Canvas) Conversations(opts ...Option) (conversations []Conversation, err error) {
-	return conversations, getjson(c.client, &conversations, asParams(opts), "/conversations")
+	return conversations, getjson(c.client, &conversations, optEnc(opts), "/conversations")
 }
 
 // Conversations returns a list of conversations
@@ -326,7 +358,7 @@ type Conversation struct {
 
 // Bookmarks will get the current user's bookmarks.
 func (c *Canvas) Bookmarks(opts ...Option) (b []Bookmark, err error) {
-	return b, getjson(c.client, &b, asParams(opts), "/users/self/bookmarks")
+	return b, getjson(c.client, &b, optEnc(opts), "/users/self/bookmarks")
 }
 
 // CreateBookmark will take a bookmark and send it to canvas.
@@ -363,7 +395,7 @@ type Bookmark struct {
 // will be passed to be used as an api path parameter.
 func getUser(c doer, pathVar interface{}, opts []Option) (u *User, err error) {
 	u = &User{client: c}
-	if err = getjson(c, u, asParams(opts), "users/%v", pathVar); err != nil {
+	if err = getjson(c, u, optEnc(opts), "users/%v", pathVar); err != nil {
 		return nil, err
 	}
 	return u, nil
@@ -405,7 +437,7 @@ func deleteBookmark(d doer, pathvar interface{}, id int) error {
 }
 
 func getAccounts(d doer, path string, opts []Option) (accts []Account, err error) {
-	err = getjson(d, &accts, asParams(opts), path)
+	err = getjson(d, &accts, optEnc(opts), path)
 	if err != nil {
 		return nil, err
 	}

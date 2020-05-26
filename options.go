@@ -73,9 +73,16 @@ func SortOpt(schemes ...string) Option {
 	return ArrayOpt("sort", schemes...)
 }
 
-// ContentType retruns a option param for getting a content type.
-func ContentType(contentTypes ...string) Option {
+// ContentTypes retruns a option param for getting a content type.
+// As a rule of thumb this is used for searches or filtering.
+func ContentTypes(contentTypes ...string) Option {
 	return ArrayOpt("content_types", contentTypes...)
+}
+
+// ContentType retruns a option param for getting a content type.
+// Generally used for file uploads.
+func ContentType(contentType string) Option {
+	return Opt("content_type", contentType)
 }
 
 // UserOpt creates an Option that should be sent

@@ -95,7 +95,7 @@ type Course struct {
 // Settings gets the course settings
 func (c *Course) Settings(opts ...Option) (cs *CourseSettings, err error) {
 	cs = &CourseSettings{}
-	return cs, getjson(c.client, cs, asParams(opts), "/courses/%d/settings", c.ID)
+	return cs, getjson(c.client, cs, optEnc(opts), "/courses/%d/settings", c.ID)
 }
 
 // UpdateSettings will update a user's settings based on a given settings struct and
@@ -148,16 +148,12 @@ func (c *Course) SearchUsers(term string, opts ...Option) (users []*User, err er
 // User gets a specific user.
 func (c *Course) User(id int, opts ...Option) (*User, error) {
 	u := &User{client: c.client}
-	return u, getjson(c.client, u, asParams(opts), "/courses/%d/users/%d", c.ID, id)
+	return u, getjson(c.client, u, optEnc(opts), "/courses/%d/users/%d", c.ID, id)
 }
 
 // Assignment will get an assignment from the course given an id.
 func (c *Course) Assignment(id int, opts ...Option) (ass *Assignment, err error) {
-	return ass, getjson(
-		c.client, &ass,
-		asParams(opts),
-		"/courses/%d/assignments/%d", c.ID, id,
-	)
+	return ass, getjson(c.client, &ass, optEnc(opts), "/courses/%d/assignments/%d", c.ID, id)
 }
 
 // Assignments send the courses assignments over a channel concurrently.
@@ -391,16 +387,13 @@ func (c *Course) Activity() (res interface{}, err error) {
 
 // Files returns a channel of all the course's files
 func (c *Course) Files(opts ...Option) <-chan *File {
-	ch := make(fileChan)
-	pager := c.filespager(ch, opts)
-	go handleErrs(pager.start(), ch, c.errorHandler)
-	return ch
+	return filesChannel(c.client, fmt.Sprintf("/courses/%d/files", c.ID), c.errorHandler, opts)
 }
 
 // File will get a specific file id.
 func (c *Course) File(id int, opts ...Option) (*File, error) {
 	f := &File{client: c.client}
-	return f, getjson(c.client, f, asParams(opts), "courses/%d/files/%d", c.ID, id)
+	return f, getjson(c.client, f, optEnc(opts), "courses/%d/files/%d", c.ID, id)
 }
 
 // ListFiles returns a slice of files for the course.
@@ -434,7 +427,7 @@ func (c *Course) Folders(opts ...Option) <-chan *Folder {
 func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 	f := &Folder{client: c.client}
 	path := fmt.Sprintf("courses/%d/folders/%d", c.ID, id)
-	return f, getjson(c.client, f, asParams(opts), path)
+	return f, getjson(c.client, f, optEnc(opts), path)
 }
 
 // ListFolders returns a slice of folders for the course.
@@ -561,11 +554,11 @@ func (c *Course) Quiz(id int, opts ...Option) (*Quiz, error) {
 }
 
 func getQuizzes(client doer, courseID int, opts []Option) (qs []*Quiz, err error) {
-	return qs, getjson(client, &qs, asParams(opts), "courses/%d/quizzes", courseID)
+	return qs, getjson(client, &qs, optEnc(opts), "courses/%d/quizzes", courseID)
 }
 
 func getQuiz(client doer, course, quiz int, opts []Option) (q *Quiz, err error) {
-	return q, getjson(client, q, asParams(opts), "courses/%d/quizzes/%d", course, quiz)
+	return q, getjson(client, q, optEnc(opts), "courses/%d/quizzes/%d", course, quiz)
 }
 
 // Quiz is a quiz json response.

@@ -3,6 +3,7 @@ package canvas
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -28,10 +29,9 @@ func init() {
 }
 
 var (
-	mu             sync.Mutex
-	testingUser    *User
-	testingCourses []*Course
-	testingCourse  *Course
+	mu            sync.Mutex
+	testingUser   *User
+	testingCourse *Course
 )
 
 func testUser() (*User, error) {
@@ -50,17 +50,14 @@ func testCourse() Course {
 			panic("could not get test course: " + err.Error())
 		}
 	}
+	testingCourse.client = copydoer(testingCourse.client)
 	return *testingCourse
 }
 
-func testCourses() ([]*Course, error) {
-	var err error
-	if testingCourses == nil {
-		c := New(testToken())
-		testingCourses, err = c.Courses()
-	}
-	return testingCourses, err
-}
+type (
+	a string
+	b = string
+)
 
 func Test(t *testing.T) {
 }
@@ -130,10 +127,9 @@ func TestSetHost(t *testing.T) {
 
 func TestAnnouncements(t *testing.T) {
 	is := is.New(t)
-	c := New(testToken())
-	_, err := c.Announcements([]string{})
+	_, err := Announcements([]string{})
 	is.True(err != nil)
-	_, err = c.Announcements([]string{"course_1"})
+	_, err = Announcements([]string{"course_1"})
 	is.NoErr(err)
 }
 
@@ -165,7 +161,7 @@ func TestUser_Err(t *testing.T) {
 	defer deauthorize(u.client)()
 
 	settings, err := u.Settings()
-	is.True(err != nil)
+	is.True(err != nil) // User.Settings should return an error when not authorized
 	is.True(settings == nil)
 	is.True(len(settings) == 0)
 
@@ -197,6 +193,18 @@ func TestSearchUser(t *testing.T) {
 	for _, u := range users {
 		if u.Name != "Test User" {
 			t.Error("wrong user")
+		}
+	}
+}
+
+func TestCourses(t *testing.T) {
+	courses, err := Courses()
+	if err != nil {
+		t.Error(err)
+	}
+	for _, c := range courses {
+		if c.ID == 0 {
+			t.Error("bad course id")
 		}
 	}
 }
@@ -250,57 +258,47 @@ func TestCourse_Files(t *testing.T) {
 	})
 }
 
-func TestCourseFiles_Err(t *testing.T) {
-	is := is.New(t)
+func TestFiles_Err(t *testing.T) {
 	c := testCourse()
-
-	errorCount := 0
+	if c.errorHandler == nil {
+		t.Error("course should have an error handler")
+	}
 	c.SetErrorHandler(func(e error) error {
 		if e == nil {
 			t.Error("expected an error")
-		} else {
-			errorCount++
 		}
-		return nil
+		return e
 	})
 
-	t.Run("Files", func(t *testing.T) {
-		is := is.New(t)
-		all, err := c.ListFiles()
-		is.NoErr(err)
-		i := 0
-		files := c.Files()
-		defer deauthorize(c.client)() // deauthorize after goroutines started
-		for f := range files {
-			is.True(f.ID != 0) // these be valid
-			i++
-		}
-		is.True(len(all) > i) // the channel should have been stopped early
-		files = c.Files()
-		is.True(files != nil)
-		for range files {
-			panic("this code should not execute")
-		}
-	})
+	defer deauthorize(c.client)()
+	files := c.Files()
+	if files == nil {
+		t.Error("nil channel")
+	}
+	for range files {
+		t.Error("should not execure")
+	}
+}
 
-	t.Run("Folders", func(t *testing.T) {
-		is := is.New(t)
-		all, err := c.ListFolders()
-		is.NoErr(err)
-		i := 0
-		folders := c.Folders()
-		defer deauthorize(c.client)()
-		for f := range folders {
-			is.True(f.ID > 0)
-			i++
+func TestFolders_Err(t *testing.T) {
+	c := testCourse()
+	if c.errorHandler == nil {
+		t.Error("course should have an error handler")
+	}
+	c.SetErrorHandler(func(e error) error {
+		if e == nil {
+			t.Error("expected an error")
 		}
-		is.True(len(all) > i)
-		for range folders {
-			panic("this code should not execute")
-		}
+		return e
 	})
-	is.True(errorCount >= 2)
-	c.errorHandler = defaultErrorHandler
+	defer deauthorize(c.client)()
+	folders := c.Folders()
+	if folders == nil {
+		t.Error("nil channel")
+	}
+	for range folders {
+		t.Error("should not execute")
+	}
 }
 
 func TestCreateFolder(t *testing.T) {
@@ -312,6 +310,136 @@ func TestCreateFolder(t *testing.T) {
 	if err = f.Delete(); err != nil {
 		t.Error(err)
 	}
+}
+
+func newSyncAuth(a *auth, mu *sync.Mutex) *syncAuth {
+	return &syncAuth{
+		tok: a.token,
+		rt:  http.DefaultTransport,
+		mu:  mu,
+	}
+}
+
+type syncAuth struct {
+	tok string
+	rt  http.RoundTripper
+	mu  *sync.Mutex
+}
+
+func (sa *syncAuth) RoundTrip(r *http.Request) (*http.Response, error) {
+	sa.mu.Lock()
+	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", sa.tok))
+	r.Header.Set("User-Agent", "tests: "+DefaultUserAgent)
+	r.Host = DefaultHost
+	r.URL.Host = DefaultHost
+	r.URL.Scheme = "https"
+	resp, err := sa.rt.RoundTrip(r)
+	sa.mu.Unlock()
+	return resp, err
+}
+
+func TestPaginationErrors(t *testing.T) {
+	c := testCourse()
+	tr := c.client.(*http.Client).Transport
+	var mu sync.Mutex
+	// we need a syncAuth for this test because some goroutines will be
+	// modifying the client object
+	if a, ok := tr.(*auth); ok {
+		c.client.(*http.Client).Transport = newSyncAuth(a, &mu)
+	}
+	allfiles, err := c.ListFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var testerror = errs.New("test error")
+
+	t.Run("send_error", func(t *testing.T) {
+		readCount := 0
+		ch := make(fileChan)
+		send := func(r io.Reader) error {
+			mu.Lock()
+			readCount++
+			if readCount == 4 {
+				mu.Unlock()
+				return testerror // send an error only after the first request
+			}
+			mu.Unlock()
+			files := make([]*File, 0)
+			err := json.NewDecoder(r).Decode(&files)
+			for _, f := range files {
+				ch <- f
+			}
+			return err
+		}
+		p := newPaginatedList(
+			c.client, fmt.Sprintf("courses/%d/files/", c.ID),
+			send, nil,
+		)
+		p.perpage = 4
+		go handleErrs(p.start(), ch, func(e error) error {
+			if e != testerror {
+				t.Error("should only be handling the error I sent")
+			}
+			return nil
+		})
+		fileCount := 0
+		for range ch {
+			fileCount++
+		}
+		if readCount != 5 {
+			t.Error("should have gone through all the pages")
+		}
+		if fileCount >= len(allfiles) {
+			t.Error("should not have gotten all of the files")
+		}
+	})
+	t.Run("auth_error", func(t *testing.T) {
+		var tok string
+		readCount := 0
+		ch := make(fileChan)
+		send := func(r io.Reader) error {
+			mu.Lock()
+			readCount++
+			if readCount == 2 {
+				tok = c.client.(*http.Client).Transport.(*syncAuth).tok
+				c.client.(*http.Client).Transport.(*syncAuth).tok = ""
+			}
+			mu.Unlock()
+			files := make([]*File, 0)
+			err := json.NewDecoder(r).Decode(&files)
+			for _, f := range files {
+				ch <- f
+			}
+			return err
+		}
+		p := newPaginatedList(
+			c.client,
+			fmt.Sprintf("courses/%d/files/", c.ID),
+			send, nil,
+		)
+		p.perpage = 4
+		go handleErrs(p.start(), ch, func(e error) error {
+			if e == nil {
+				t.Error("expected error")
+			}
+			err, ok := e.(*AuthError)
+			if !ok {
+				t.Errorf("expected an auth error; got %T", err)
+			}
+			return nil
+		})
+		count := 0
+		for f := range ch {
+			if f.ID == 0 {
+				t.Error("got bad file id")
+			}
+			count++
+		}
+		c.client.(*http.Client).Transport.(*syncAuth).tok = tok
+		if count >= len(allfiles) {
+			t.Error("should not have the same count")
+		}
+	})
 }
 
 func TestCourse_Settings(t *testing.T) {
@@ -337,6 +465,11 @@ func TestFilesFolders(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	byPath, err := FolderPath("/testfolder/another")
+	if len(byPath) != 3 {
+		t.Error("expected three folders")
+	}
+
 	parent, err := folder.ParentFolder()
 	if err != nil {
 		t.Error(err)
@@ -362,13 +495,40 @@ func TestFilesFolders(t *testing.T) {
 	if f != folder {
 		t.Error("pointers should be the same")
 	}
-
-	files := c.Files(ContentType("application/x-yaml", "text/markdown"))
+	files := Files(ContentTypes("application/x-yaml", "text/markdown"))
 	for file = range files {
 		if file.ContentType != "application/x-yaml" && file.ContentType != "text/markdown" {
 			t.Error("got wrong content type")
 		}
 	}
+}
+
+func TestFileUpload(t *testing.T) {
+	t.Skip("can't figure out file uploads")
+	osfile, err := os.Open("./gen/Resume.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer osfile.Close()
+	stats, err := osfile.Stat()
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Println(osfile.Name(), stats.Name(), stats.Size())
+	file, err := UploadFile(
+		"resume.pdf", osfile,
+		ContentType("application/pdf"),
+		Opt("size", stats.Size()),
+		Opt("on_duplicate", "rename"),
+		Opt("no_redirect", true),
+		// Opt("parent_folder_path", "/"),
+		// Opt("parent_folder_id", "19925792"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("%+v\n", file)
 }
 
 func TestCourse_Settings_Err(t *testing.T) {
@@ -382,22 +542,21 @@ func TestCourse_Settings_Err(t *testing.T) {
 
 func TestAccount(t *testing.T) {
 	is := is.New(t)
-	c := New(testToken())
-	_, err := c.SearchAccounts("UC Berkeley")
+	_, err := SearchAccounts("UC Berkeley")
 	is.NoErr(err)
 
 	t.Skip("can't figure out how to get account authorization")
-	as, err := Accounts()
-	if err != nil {
-		t.Error(err)
-	}
-	fmt.Println(as)
-
 	a, err := CurrentAccount()
 	if err != nil {
 		t.Error(err)
 	}
 	fmt.Println(a)
+
+	as, err := Accounts()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Println(as)
 }
 
 func TestBookmarks(t *testing.T) {
@@ -490,7 +649,7 @@ func TestOptions(t *testing.T) {
 		DateOpt("date", time.Now()),
 		SortOpt("date"),
 	}
-	q := asParams(opts).Encode()
+	q := optEnc(opts).Encode()
 	if q == "" {
 		t.Error("should not be empty")
 	}
@@ -521,10 +680,10 @@ func TestOptions(t *testing.T) {
 	is.Equal(o.Value(), []string{"value"})
 }
 
-func deauthorize(d doer) func() {
+func deauthorize(d doer) (reset func()) {
 	mu.Lock()
 	defer mu.Unlock()
-	warning := func() {
+	reset = func() {
 		fmt.Println("warning: client no deauthorized")
 	}
 	var cli *http.Client
@@ -535,18 +694,47 @@ func deauthorize(d doer) func() {
 	case *http.Client:
 		cli = c
 	default:
-		return warning
+		return
+	}
+	var token string
+	switch ath := cli.Transport.(type) {
+	case *auth:
+		token = ath.token
+		ath.token = ""
+		reset = func() { ath.token = token }
+	case *syncAuth:
+		token = ath.tok
+		ath.tok = ""
+		reset = func() { ath.tok = token }
+	default:
+		return
+	}
+	return reset
+}
+
+func copydoer(d doer) doer {
+	if d == nil {
+		return nil
+	}
+	cli := &http.Client{}
+	switch dr := d.(type) {
+	case *client:
+		*cli = dr.Client
+	case *http.Client:
+		*cli = *dr
+	default:
+		panic(fmt.Sprintf("dont't know how to copy %T", d))
 	}
 
-	au, ok := cli.Transport.(*auth)
-	if !ok {
-		return warning
+	switch trans := cli.Transport.(type) {
+	case *auth:
+		a := &auth{}
+		*a = *trans
+		cli.Transport = a
+	case *syncAuth:
+		a := &syncAuth{}
+		*a = *trans
+		cli.Transport = a
 	}
-	token := au.token
-	au.token = ""
-	return func() {
-		mu.Lock()
-		au.token = token
-		mu.Unlock()
-	}
+	return cli
 }
