@@ -24,17 +24,20 @@ type encoder interface {
 
 func (p params) Join(pa map[string][]string) {
 	for k, v := range pa {
-		if _, ok := p[k]; ok {
-			continue
+		if _, ok := p[k]; !ok {
+			p[k] = v
 		}
-		p[k] = v
 	}
 }
 
-func (p params) Add(vals ...Option) {
+func (p params) Add(vals []Option) {
 	for _, v := range vals {
 		p[v.Name()] = v.Value()
 	}
+}
+
+func (p params) Set(key, val string) {
+	p[key] = []string{val}
 }
 
 // Encode converts the params to a string

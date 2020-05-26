@@ -45,12 +45,14 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 	case http.StatusForbidden:
 		resp.Body.Close()
 		return nil, ErrRateLimitExceeded
+	case http.StatusUnprocessableEntity:
+		return nil, errs.Pair(resp.Body.Close(), errs.New(resp.Status))
+	case http.StatusInternalServerError:
+		e = &Error{Status: resp.Status}
 	case http.StatusNotFound, http.StatusUnauthorized:
 		e = &AuthError{}
 	case http.StatusBadRequest:
-		e = &Error{}
-	case http.StatusUnprocessableEntity:
-		return nil, errs.Pair(resp.Body.Close(), errs.New(resp.Status))
+		e = &Error{Status: resp.Status}
 	}
 	return nil, errs.Chain(e, json.NewDecoder(resp.Body).Decode(&e), resp.Body.Close())
 }
@@ -128,9 +130,12 @@ type auth struct {
 func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.token))
 	req.Header.Set("User-Agent", DefaultUserAgent)
-	req.Host = a.host
-	req.URL.Scheme = "https"
-	req.URL.Host = a.host
+	if req.URL.Host == "" {
+		// TODO: don't do this, it has caused my too much pain
+		req.Host = a.host
+		req.URL.Host = a.host
+		req.URL.Scheme = "https"
+	}
 	return a.rt.RoundTrip(req)
 }
 
@@ -151,6 +156,11 @@ type Error struct {
 		EndDate string `json:"end_date"`
 	} `json:"errors"`
 	Message string `json:"message"`
+
+	Err      string `json:"error"`
+	SentryID string `json:"sentryId"`
+
+	Status string `json:"-"`
 }
 
 func (e *Error) Error() string {
@@ -159,6 +169,9 @@ func (e *Error) Error() string {
 	}
 	if e.Errors.EndDate != "" {
 		return fmt.Sprintf("end_date: %s", e.Errors.EndDate)
+	}
+	if e.SentryID != "" {
+		return fmt.Sprintf("error status: %s; sentryId: %s", e.Err, e.SentryID)
 	}
 	return fmt.Sprintf("canvas error: %#v", e)
 }

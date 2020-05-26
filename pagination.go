@@ -137,7 +137,7 @@ func (p *paginated) getQuery(page int) params {
 		"page":     {strconv.FormatInt(int64(page), 10)}, // base 10
 		"per_page": {fmt.Sprintf("%d", p.perpage)},
 	}
-	q.Add(p.opts...)
+	q.Add(p.opts)
 	return q
 }
 

@@ -45,6 +45,11 @@ func (u *User) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), optEnc(opts))
 }
 
+// File will get a user's file by id
+func (u *User) File(id int, opts ...Option) (*File, error) {
+	return getUserFile(u.client, id, u.ID, opts)
+}
+
 // CalendarEvents gets the user's calendar events.
 func (u *User) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
 	return cal, getjson(u.client, &cal, optEnc(opts), "/users/%d/calendar_events", u.ID)
@@ -176,4 +181,9 @@ func (u *User) SetColor(asset, hexcode string) error {
 		return err
 	}
 	return resp.Body.Close()
+}
+
+func getUserFile(d doer, id int, userid interface{}, opts optEnc) (*File, error) {
+	f := &File{client: d}
+	return f, getjson(d, f, opts, "/users/%v/files/%d", userid, id)
 }

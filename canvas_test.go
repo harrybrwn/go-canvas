@@ -504,8 +504,7 @@ func TestFilesFolders(t *testing.T) {
 }
 
 func TestFileUpload(t *testing.T) {
-	t.Skip("can't figure out file uploads")
-	osfile, err := os.Open("./gen/Resume.pdf")
+	osfile, err := os.Open("./README.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,20 +514,32 @@ func TestFileUpload(t *testing.T) {
 		t.Error(err)
 	}
 
-	fmt.Println(osfile.Name(), stats.Name(), stats.Size())
 	file, err := UploadFile(
-		"resume.pdf", osfile,
-		ContentType("application/pdf"),
+		"readme.md", osfile,
+		ContentType("text/markdown"),
 		Opt("size", stats.Size()),
-		Opt("on_duplicate", "rename"),
+		Opt("on_duplicate", "overwrite"),
 		Opt("no_redirect", true),
-		// Opt("parent_folder_path", "/"),
-		// Opt("parent_folder_id", "19925792"),
+		Opt("parent_folder_path", "/"),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("%+v\n", file)
+	if file == nil {
+		t.Fatal("got nil response file")
+	}
+	err = file.Rename("The_ReadMe_file.md")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if err = file.Delete(); err != nil {
+		t.Error(err)
+	}
+	_, err = GetFile(file.ID)
+	if err == nil {
+		t.Error("expected an error here")
+	}
 }
 
 func TestCourse_Settings_Err(t *testing.T) {

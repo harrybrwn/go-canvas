@@ -131,6 +131,9 @@ func (f *File) edit(opts optEnc) error {
 	if err != nil {
 		return err
 	}
+	var b bytes.Buffer
+	b.ReadFrom(resp.Body)
+	fmt.Println(b.String())
 	return resp.Body.Close()
 }
 
@@ -273,26 +276,17 @@ func uploadFile(
 	opts []Option,
 ) (*File, error) {
 	q := params{"name": {filename}}
-	q.Add(opts...)
-	query := q.Encode()
+	q.Add(opts)
 
-	req := newreq("POST", path, query)
+	req := newreq("POST", path, q.Encode())
 	resp, err := do(d, req)
 	if err != nil {
 		return nil, err
 	}
-	uploader, err := getUploader(resp.Body)
+	uploader, err := getUploader(resp.Body) // will close the body
 	if err != nil {
 		return nil, err
 	}
-	// req, _ = http.NewRequest("OPTIONS", uploader.UploadURL, nil)
-	// resp, err = d.Do(req)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// b, _ := ioutil.ReadAll(resp.Body)
-	// fmt.Printf("%s\n", b)
-	// fmt.Println(resp.Status)
 	return uploader.upload(d, filename, r)
 }
 
@@ -307,13 +301,9 @@ func createFolder(
 	parentpath, name := filepath.Split(path)
 	q := params{"name": {name}}
 	if parentpath != "" {
-		q["parent_folder_path"] = []string{parentpath}
+		q.Set("parent_folder_path", parentpath)
 	}
-	for _, o := range opts {
-		if _, ok := q[o.Name()]; !ok {
-			q[o.Name()] = o.Value()
-		}
-	}
+	q.Add(opts)
 
 	resp, err := post(d, fmt.Sprintf(respath, v...), q)
 	if err != nil {
@@ -326,8 +316,23 @@ func createFolder(
 
 func getUploader(rc io.ReadCloser) (*fileupload, error) {
 	defer rc.Close()
-	fup := &fileupload{}
-	return fup, json.NewDecoder(rc).Decode(fup)
+	b := &bytes.Buffer{}
+	fup := &fileupload{
+		body:   b,
+		writer: multipart.NewWriter(b),
+	}
+	err := json.NewDecoder(rc).Decode(fup)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range fup.UploadParams {
+		fup.writer.WriteField(key, fmt.Sprintf("%v", value))
+	}
+	fup.url, err = url.Parse(fup.UploadURL)
+	if err != nil {
+		return nil, err
+	}
+	return fup, nil
 }
 
 type fileupload struct {
@@ -335,45 +340,34 @@ type fileupload struct {
 	Progress     string       `json:"progress"`
 	UploadURL    string       `json:"upload_url"`
 	UploadParams genericParam `json:"upload_params"`
+
+	url    *url.URL
+	body   *bytes.Buffer
+	writer *multipart.Writer
 }
 
 func (f *fileupload) upload(d doer, filename string, r io.Reader) (*File, error) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for key, value := range f.UploadParams {
-		writer.WriteField(key, fmt.Sprintf("%v", value))
-	}
-
-	form, err := writer.CreateFormFile(f.FileParam, filename)
+	form, err := f.writer.CreateFormFile(f.FileParam, filename)
 	if err != nil {
 		return nil, err
 	}
-
 	if _, err = io.Copy(form, r); err != nil {
 		return nil, err
 	}
-	writer.Close()
-
-	u, err := url.Parse(f.UploadURL)
-	if err != nil {
-		return nil, err
-	}
+	f.writer.Close() // do not defer, adds the correct line endings to the body
 	req := &http.Request{
 		Method: "POST",
-		URL:    u,
-		Body:   ioutil.NopCloser(&body),
+		URL:    f.url,
+		Body:   ioutil.NopCloser(f.body),
 		Header: http.Header{
-			"Content-Type": {writer.FormDataContentType()}},
-		ContentLength: int64(body.Len()),
+			"Content-Type": {f.writer.FormDataContentType()}},
+		ContentLength: int64(f.body.Len()),
 	}
-	fmt.Println(body.String())
-	// resp, err := do(d, req)
-	resp, err := d.Do(req)
+	resp, err := do(d, req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("%+v\n", resp.Status)
 	file := &File{client: d}
 	return file, json.NewDecoder(resp.Body).Decode(file)
 }

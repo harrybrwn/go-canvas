@@ -116,6 +116,16 @@ func Todos() error {
 	return defaultCanvas.Todos()
 }
 
+// GetFile will get a file by the id.
+func (c *Canvas) GetFile(id int, opts ...Option) (*File, error) {
+	return getUserFile(c.client, id, "self", opts)
+}
+
+// GetFile will get a file by the id.
+func GetFile(id int, opts ...Option) (*File, error) {
+	return defaultCanvas.GetFile(id, opts...)
+}
+
 // Files will return a channel of all the default user's files.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_index
 func (c *Canvas) Files(opts ...Option) <-chan *File {
@@ -226,7 +236,7 @@ func (c *Canvas) Announcements(
 	opts ...Option,
 ) (arr []DiscussionTopic, err error) {
 	p := params{"context_codes": contextCodes}
-	p.Add(opts...)
+	p.Add(opts)
 	return arr, getjson(c.client, &arr, p, "/announcements")
 }
 
