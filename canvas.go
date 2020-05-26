@@ -129,7 +129,7 @@ func GetFile(id int, opts ...Option) (*File, error) {
 // Files will return a channel of all the default user's files.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_index
 func (c *Canvas) Files(opts ...Option) <-chan *File {
-	return filesChannel(c.client, "/users/self/files", ConcurrentErrorHandler, opts)
+	return filesChannel(c.client, "/users/self/files", ConcurrentErrorHandler, opts, nil)
 }
 
 // Files will return a channel of all the default user's files.

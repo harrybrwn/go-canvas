@@ -387,7 +387,7 @@ func (c *Course) Activity() (res interface{}, err error) {
 
 // Files returns a channel of all the course's files
 func (c *Course) Files(opts ...Option) <-chan *File {
-	return filesChannel(c.client, fmt.Sprintf("/courses/%d/files", c.ID), c.errorHandler, opts)
+	return filesChannel(c.client, fmt.Sprintf("/courses/%d/files", c.ID), c.errorHandler, opts, nil)
 }
 
 // File will get a specific file id.
@@ -464,6 +464,10 @@ func (c *Course) CreateFolder(path string, opts ...Option) (*Folder, error) {
 // code is receiving the channel will end gracefully.
 func (c *Course) SetErrorHandler(f errorHandlerFunc) {
 	c.errorHandler = f
+}
+
+func (c *Course) setclient(d doer) {
+	c.client = d
 }
 
 // Term is a school term. One school year.
@@ -620,7 +624,7 @@ func (c *Course) filespager(ch chan *File, params []Option) *paginated {
 	return newPaginatedList(
 		c.client,
 		fmt.Sprintf("courses/%d/files", c.ID),
-		sendFilesFunc(c.client, ch),
+		sendFilesFunc(c.client, ch, nil),
 		params,
 	)
 }
@@ -629,7 +633,7 @@ func (c *Course) folderspager(ch chan *Folder, params []Option) *paginated {
 	return newPaginatedList(
 		c.client,
 		fmt.Sprintf("courses/%d/folders", c.ID),
-		sendFoldersFunc(c.client, ch),
+		sendFoldersFunc(c.client, ch, nil),
 		params,
 	)
 }
@@ -667,7 +671,7 @@ func (c *Course) collectUsers(path string, opts []Option) (users []*User, err er
 	}
 }
 
-func sendFilesFunc(d doer, ch chan *File) func(io.Reader) error {
+func sendFilesFunc(d doer, ch chan *File, folder *Folder) func(io.Reader) error {
 	return func(r io.Reader) error {
 		files := make([]*File, 0)
 		err := json.NewDecoder(r).Decode(&files)
@@ -675,14 +679,15 @@ func sendFilesFunc(d doer, ch chan *File) func(io.Reader) error {
 			return err
 		}
 		for _, f := range files {
-			f.client = d
+			f.setclient(d)
+			f.folder = folder
 			ch <- f
 		}
 		return nil
 	}
 }
 
-func sendFoldersFunc(d doer, ch chan *Folder) sendFunc {
+func sendFoldersFunc(d doer, ch chan *Folder, parent *Folder) sendFunc {
 	return func(r io.Reader) error {
 		folders := make([]*Folder, 0)
 		err := json.NewDecoder(r).Decode(&folders)
@@ -690,7 +695,8 @@ func sendFoldersFunc(d doer, ch chan *Folder) sendFunc {
 			return err
 		}
 		for _, f := range folders {
-			f.client = d
+			f.setclient(d)
+			f.parent = parent
 			ch <- f
 		}
 		return nil

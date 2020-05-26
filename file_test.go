@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -52,6 +53,10 @@ func TestCourse_Files(t *testing.T) {
 		for folder = range folders {
 			is.True(folder.client != nil)
 			is.True(folder.ID != 0)
+
+			dir, name := filepath.Split(folder.FullName)
+			is.Equal(dir, folder.Path())
+			is.Equal(name, folder.Name())
 		}
 		for f := range folder.Folders() {
 			is.True(f.ParentFolderID == folder.ID)

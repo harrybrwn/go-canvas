@@ -15,12 +15,31 @@ import (
 	"time"
 )
 
-// FileType is a generic interface for filesystem objects
-type FileType interface {
+// FileObjType is the type of a file
+type FileObjType int
+
+const (
+	// TypeFile is the type for files
+	TypeFile FileObjType = iota
+	// TypeFolder is the type for folders
+	TypeFolder
+)
+
+// FileObj is a interface for filesystem objects
+type FileObj interface {
 	GetID() int
+	Type() FileObjType
 	Name() string
-	ParentFolder() (*Folder, error)
+	Path() string
+
+	Move(*Folder) error
+	Rename(string) error
+	Copy(*Folder) error
 	Delete(...Option) error
+	Hide() error
+	Unhide() error
+
+	ParentFolder() (*Folder, error)
 }
 
 // File is a file.
@@ -61,6 +80,20 @@ type File struct {
 // Name returns the file's filename
 func (f *File) Name() string {
 	return f.DisplayName
+}
+
+// Type returns canvas.TypeFile
+func (f *File) Type() FileObjType {
+	return TypeFile
+}
+
+// Path returns the folder path that the file is in.
+func (f *File) Path() string {
+	fldr, _ := f.ParentFolder()
+	if fldr == nil {
+		return ""
+	}
+	return fldr.FullName
 }
 
 // GetID is for the FileType interface
@@ -110,32 +143,74 @@ func (f *File) Delete(opts ...Option) error {
 	return resp.Body.Close()
 }
 
+// Copy the file into another folder.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.copy_file
+func (f *File) Copy(dest *Folder) error {
+	resp, err := post(
+		f.client,
+		fmt.Sprintf("/folders/%d/copy_file", dest.ID),
+		params{
+			"source_file_id": {f.strID()},
+			"on_duplicate":   {"rename"},
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}
+
 // Move a file to another folder.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_update
-func (f *File) Move(folder *Folder, opts ...Option) error {
-	if folder.ID <= 0 && folder.FullName != "" {
-		return f.edit(append(opts, Opt("parent_folder_path", folder.FullName)))
+func (f *File) Move(dest *Folder) error {
+	id := dest.GetID()
+	if id <= 0 && dest.FullName != "" {
+		return f.edit(Opt("parent_folder_path", dest.FullName))
 	}
-	return f.edit(append(opts, Opt("parent_folder_id", folder.ID)))
+	return f.edit(Opt("parent_folder_id", id))
 }
 
 // Rename the file.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_update
-func (f *File) Rename(name string, opts ...Option) error {
-	return f.edit(append(opts, Opt("name", name)))
+func (f *File) Rename(name string) error {
+	return f.edit(Opt("name", name))
 }
 
-func (f *File) edit(opts optEnc) error {
+// Hide the file
+func (f *File) Hide() error {
+	return f.edit(Opt("hidden", true))
+}
+
+// Unhide the file
+func (f *File) Unhide() error {
+	return f.edit(Opt("hidden", false))
+}
+
+func (f *File) edit(opts ...Option) error {
 	resp, err := put(
 		f.client,
 		fmt.Sprintf("/files/%d", f.ID),
-		opts,
+		optEnc(opts),
 	)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	return json.NewDecoder(resp.Body).Decode(f)
+}
+
+// WriteTo will write the contents of the file to an io.Writer
+func (f *File) WriteTo(w io.Writer) (int64, error) {
+	resp, err := http.Get(f.URL)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return io.Copy(w, resp.Body)
+}
+
+func (f *File) strID() string {
+	return fmt.Sprintf("%d", f.ID)
 }
 
 // Folder is a folder
@@ -169,14 +244,25 @@ type Folder struct {
 	parent *Folder
 }
 
-// Name returns the folder's name
+// Name returns only the folder's name without the path.
 func (f *Folder) Name() string {
 	return f.Foldername
+}
+
+// Path wil return only the folder's path without it's name.
+func (f *Folder) Path() string {
+	dir, _ := filepath.Split(f.FullName)
+	return dir
 }
 
 // GetID will return the folder id, this is only here for interfaces.
 func (f *Folder) GetID() int {
 	return f.ID
+}
+
+// Type returns canvas.TypeFolder
+func (f *Folder) Type() FileObjType {
+	return TypeFolder
 }
 
 // ParentFolder will get the folder's parent folder.
@@ -204,7 +290,7 @@ func (f *Folder) File(id int, opts ...Option) (*File, error) {
 func (f *Folder) Files(opts ...Option) <-chan *File {
 	return filesChannel(
 		f.client, fmt.Sprintf("folders/%d/files", f.ID),
-		ConcurrentErrorHandler, opts,
+		ConcurrentErrorHandler, opts, f,
 	)
 }
 
@@ -215,7 +301,8 @@ func (f *Folder) Folders() <-chan *Folder {
 	pages := newPaginatedList(
 		f.client,
 		fmt.Sprintf("folders/%d/folders", f.ID),
-		sendFoldersFunc(f.client, ch), nil,
+		sendFoldersFunc(f.client, ch, f),
+		nil,
 	)
 	go handleErrs(pages.start(), ch, ConcurrentErrorHandler)
 	return ch
@@ -232,12 +319,49 @@ func (f *Folder) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	)
 }
 
+// Copy the folder to a another folder (dest)
+// https://canvas.instructure.com/doc/api/files.html#method.folders.copy_folder
+func (f *Folder) Copy(dest *Folder) error {
+	resp, err := post(
+		f.client,
+		fmt.Sprintf("/folders/%d/copy_folder", dest.ID),
+		params{"source_folder_id": {fmt.Sprintf("%d", f.ID)}},
+	)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
+}
+
+// Rename the folder.
+func (f *Folder) Rename(name string) error {
+	return f.edit(Opt("name", name))
+}
+
+// Move the folder into another folder
+func (f *Folder) Move(dest *Folder) error {
+	id := dest.GetID()
+	if id <= 0 && dest.FullName != "" {
+		return f.edit(Opt("parent_folder_path", dest.FullName))
+	}
+	return f.edit(Opt("parent_folder_id", id))
+}
+
+// Hide the folder
+func (f *Folder) Hide() error {
+	return f.edit(Opt("hidden", true))
+}
+
+// Unhide the folder
+func (f *Folder) Unhide() error {
+	return f.edit(Opt("hidden", false))
+}
+
 // Delete the folder
 // https://canvas.instructure.com/doc/api/files.html#method.folders.api_destroy
 func (f *Folder) Delete(opts ...Option) error {
 	resp, err := delete(
-		f.client,
-		fmt.Sprintf("/folders/%d", f.ID),
+		f.client, fmt.Sprintf("/folders/%d", f.ID),
 		optEnc(opts),
 	)
 	if err != nil {
@@ -257,14 +381,25 @@ func (f *Folder) UploadFile(
 	return uploadFile(f.client, filename, r, path, opts)
 }
 
+// https://canvas.instructure.com/doc/api/files.html#method.folders.update
+func (f *Folder) edit(opts ...Option) error {
+	resp, err := put(f.client, fmt.Sprintf("/folders/%d", f.ID), optEnc(opts))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return json.NewDecoder(resp.Body).Decode(f)
+}
+
 func filesChannel(
 	d doer,
 	path string,
 	handler errorHandlerFunc,
 	opts []Option,
+	parent *Folder,
 ) <-chan *File {
 	ch := make(fileChan)
-	pager := newPaginatedList(d, path, sendFilesFunc(d, ch), opts)
+	pager := newPaginatedList(d, path, sendFilesFunc(d, ch, parent), opts)
 	go handleErrs(pager.start(), ch, handler)
 	return ch
 }
@@ -388,8 +523,9 @@ func folderList(d doer, path string) ([]*Folder, error) {
 }
 
 var (
-	_ FileType = (*File)(nil)
-	_ FileType = (*Folder)(nil)
+	_ FileObj     = (*File)(nil)
+	_ io.WriterTo = (*File)(nil)
+	_ FileObj     = (*Folder)(nil)
 )
 
 type fileChan chan *File
@@ -402,4 +538,12 @@ type folderChan chan *Folder
 
 func (fc folderChan) Close() {
 	close(fc)
+}
+
+func (f *File) setclient(d doer) {
+	f.client = d
+}
+
+func (f *Folder) setclient(d doer) {
+	f.client = d
 }

@@ -53,11 +53,6 @@ func testCourse() Course {
 	return *testingCourse
 }
 
-type (
-	a string
-	b = string
-)
-
 func Test(t *testing.T) {
 }
 
