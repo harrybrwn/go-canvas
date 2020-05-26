@@ -60,7 +60,7 @@ type File struct {
 
 // Name returns the file's filename
 func (f *File) Name() string {
-	return f.Filename
+	return f.DisplayName
 }
 
 // GetID is for the FileType interface
@@ -113,6 +113,9 @@ func (f *File) Delete(opts ...Option) error {
 // Move a file to another folder.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_update
 func (f *File) Move(folder *Folder, opts ...Option) error {
+	if folder.ID <= 0 && folder.FullName != "" {
+		return f.edit(append(opts, Opt("parent_folder_path", folder.FullName)))
+	}
 	return f.edit(append(opts, Opt("parent_folder_id", folder.ID)))
 }
 
@@ -131,10 +134,8 @@ func (f *File) edit(opts optEnc) error {
 	if err != nil {
 		return err
 	}
-	var b bytes.Buffer
-	b.ReadFrom(resp.Body)
-	fmt.Println(b.String())
-	return resp.Body.Close()
+	defer resp.Body.Close()
+	return json.NewDecoder(resp.Body).Decode(f)
 }
 
 // Folder is a folder

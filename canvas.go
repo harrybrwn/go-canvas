@@ -108,7 +108,7 @@ func CurrentUser(opts ...Option) (*User, error) { return defaultCanvas.CurrentUs
 
 // Todos will get the current user's todo's.
 func (c *Canvas) Todos() error {
-	panic("not implimented")
+	panic("not implimented") // TODO: finish this
 }
 
 // Todos will get the current user's todo's.

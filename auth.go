@@ -47,11 +47,9 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 		return nil, ErrRateLimitExceeded
 	case http.StatusUnprocessableEntity:
 		return nil, errs.Pair(resp.Body.Close(), errs.New(resp.Status))
-	case http.StatusInternalServerError:
-		e = &Error{Status: resp.Status}
 	case http.StatusNotFound, http.StatusUnauthorized:
 		e = &AuthError{}
-	case http.StatusBadRequest:
+	case http.StatusBadRequest, http.StatusInternalServerError:
 		e = &Error{Status: resp.Status}
 	}
 	return nil, errs.Chain(e, json.NewDecoder(resp.Body).Decode(&e), resp.Body.Close())
