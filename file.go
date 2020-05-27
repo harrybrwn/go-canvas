@@ -294,18 +294,28 @@ func (f *Folder) Files(opts ...Option) <-chan *File {
 	)
 }
 
+// ListFiles will list all of the files that are in the folder.
+func (f *Folder) ListFiles(opts ...Option) ([]*File, error) {
+	return listFiles(f.client, fmt.Sprintf("folders/%d/files", f.ID), f, opts)
+}
+
 // Folders will return a channel that sends all of the sub-folders.
 // https://canvas.instructure.com/doc/api/files.html#method.folders.api_index
-func (f *Folder) Folders() <-chan *Folder {
+func (f *Folder) Folders(opts ...Option) <-chan *Folder {
 	ch := make(folderChan)
 	pages := newPaginatedList(
 		f.client,
 		fmt.Sprintf("folders/%d/folders", f.ID),
-		sendFoldersFunc(f.client, ch, f),
-		nil,
+		sendFoldersFunc(f.client, ch, f), opts,
 	)
 	go handleErrs(pages.start(), ch, ConcurrentErrorHandler)
 	return ch
+}
+
+// ListFolders will collect all the folders in a slice of Folders.
+// https://canvas.instructure.com/doc/api/files.html#method.folders.api_index
+func (f *Folder) ListFolders(opts ...Option) ([]*Folder, error) {
+	return listFolders(f.client, fmt.Sprintf("/folders/%d/folders", f.ID), f, opts)
 }
 
 // CreateFolder creates a new folder as a subfolder of the current one.
@@ -404,6 +414,22 @@ func filesChannel(
 	return ch
 }
 
+func foldersChannel(
+	d doer,
+	path string,
+	handler errorHandlerFunc,
+	opts []Option,
+	parent *Folder,
+) <-chan *Folder {
+	ch := make(folderChan)
+	pages := newPaginatedList(
+		d, path, sendFoldersFunc(d, ch, parent), opts,
+	)
+	go handleErrs(pages.start(), ch, ConcurrentErrorHandler)
+	return ch
+}
+
+// https://canvas.instructure.com/doc/api/file.file_uploads.html
 func uploadFile(
 	d doer,
 	filename string,
@@ -506,6 +532,42 @@ func (f *fileupload) upload(d doer, filename string, r io.Reader) (*File, error)
 	defer resp.Body.Close()
 	file := &File{client: d}
 	return file, json.NewDecoder(resp.Body).Decode(file)
+}
+
+func listFiles(d doer, path string, parent *Folder, opts []Option) ([]*File, error) {
+	ch := make(chan *File)
+	page := newPaginatedList(
+		d, path, sendFilesFunc(d, ch, parent),
+		opts,
+	)
+	files := make([]*File, 0)
+	errs := page.start()
+	for {
+		select {
+		case file := <-ch:
+			files = append(files, file)
+		case err := <-errs:
+			close(ch)
+			return files, err
+		}
+	}
+}
+
+func listFolders(d doer, path string, parent *Folder, opts []Option) ([]*Folder, error) {
+	ch := make(chan *Folder)
+	// p := c.folderspager(ch, opts)
+	page := newPaginatedList(d, path, sendFoldersFunc(d, ch, nil), opts)
+	folders := make([]*Folder, 0)
+	errs := page.start()
+	for {
+		select {
+		case folder := <-ch:
+			folders = append(folders, folder)
+		case err := <-errs:
+			close(ch)
+			return folders, err
+		}
+	}
 }
 
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")

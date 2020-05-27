@@ -53,7 +53,20 @@ func testCourse() Course {
 	return *testingCourse
 }
 
+type thing struct {
+	ID int `json:"id"`
+}
+
+func (t *thing) id(s string) string {
+	return fmt.Sprintf(s, t.ID)
+}
+
 func Test(t *testing.T) {
+	th := thing{}
+	b := []byte(`{"id": 123}`)
+	json.Unmarshal(b, &th)
+	fmt.Println(th)
+	fmt.Println(th.id("/path/%d/to/thign"))
 }
 
 func TestAssignments(t *testing.T) {
@@ -298,6 +311,14 @@ func TestLinks(t *testing.T) {
 		if links.Last.page != 45 {
 			t.Error("wrong page number")
 		}
+	}
+
+	n, err := findlastpage(http.Header{})
+	if err == nil {
+		t.Error("expected an error")
+	}
+	if n != -1 {
+		t.Error("n should be -1")
 	}
 }
 

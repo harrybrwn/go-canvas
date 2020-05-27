@@ -2,6 +2,8 @@ package canvas
 
 import (
 	"fmt"
+	"io"
+	"path/filepath"
 	"time"
 )
 
@@ -48,6 +50,59 @@ func (u *User) Courses(opts ...Option) ([]*Course, error) {
 // File will get a user's file by id
 func (u *User) File(id int, opts ...Option) (*File, error) {
 	return getUserFile(u.client, id, u.ID, opts)
+}
+
+// Files will return a channel of files.
+func (u *User) Files(opts ...Option) <-chan *File {
+	return filesChannel(
+		u.client,
+		fmt.Sprintf("/users/%d/files", u.ID),
+		ConcurrentErrorHandler,
+		opts, nil,
+	)
+}
+
+// ListFiles will collect all of the users files.
+func (u *User) ListFiles(opts ...Option) ([]*File, error) {
+	return listFiles(u.client, fmt.Sprintf("/users/%d/files", u.ID), nil, opts)
+}
+
+// Folders returns a channel of the user's folders.
+func (u *User) Folders(opts ...Option) <-chan *Folder {
+	return foldersChannel(
+		u.client,
+		fmt.Sprintf("/users/%d/folders", u.ID),
+		ConcurrentErrorHandler,
+		opts, nil,
+	)
+}
+
+// ListFolders will return a slice of all the user's folders
+func (u *User) ListFolders(opts ...Option) ([]*Folder, error) {
+	return listFolders(u.client, fmt.Sprintf("/users/%d/folders", u.ID), nil, opts)
+}
+
+// FolderPath will split the path and return a list containing all of the folders in the path.
+func (u *User) FolderPath(path string) ([]*Folder, error) {
+	path = filepath.Join(fmt.Sprintf("/users/%d/folders/by_path", u.ID), path)
+	return folderList(u.client, path)
+}
+
+// UploadFile will upload the contents of an io.Reader to a
+// new file in the user's files.
+func (u *User) UploadFile(
+	filename string,
+	r io.Reader,
+	opts ...Option,
+) (*File, error) {
+	path := fmt.Sprintf("/users/%d/files", u.ID)
+	return uploadFile(u.client, filename, r, path, opts)
+}
+
+// CreateFolder will create a new folder.
+func (u *User) CreateFolder(path string, opts ...Option) (*Folder, error) {
+	dir, name := filepath.Split(path)
+	return createFolder(u.client, dir, name, opts, "/users/%d/folders", u.ID)
 }
 
 // CalendarEvents gets the user's calendar events.

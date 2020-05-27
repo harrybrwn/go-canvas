@@ -52,9 +52,10 @@ type closable interface {
 
 type errorHandlerFunc func(error) error
 
-// Possible bug: ok so this function should be run in a sperate goroutine. When an
-// error is found and the send channel 'ch' is closed, some objects may be sent
-// on the channel after it is closed because it was closed in a seperate goroutine.
+// Possible bug: ok so this function should be run in a sperate goroutine.
+// When an error is found and the send channel 'ch' is closed, some
+// objects may be sent on the channel after it is closed because it was
+// closed in a seperate goroutine.
 func handleErrs(errs <-chan error, ch closable, handle errorHandlerFunc) {
 	var err error
 	for {

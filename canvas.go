@@ -112,9 +112,7 @@ func (c *Canvas) Todos() error {
 }
 
 // Todos will get the current user's todo's.
-func Todos() error {
-	return defaultCanvas.Todos()
-}
+func Todos() error { return defaultCanvas.Todos() }
 
 // GetFile will get a file by the id.
 func (c *Canvas) GetFile(id int, opts ...Option) (*File, error) {
@@ -122,9 +120,7 @@ func (c *Canvas) GetFile(id int, opts ...Option) (*File, error) {
 }
 
 // GetFile will get a file by the id.
-func GetFile(id int, opts ...Option) (*File, error) {
-	return defaultCanvas.GetFile(id, opts...)
-}
+func GetFile(id int, opts ...Option) (*File, error) { return defaultCanvas.GetFile(id, opts...) }
 
 // Files will return a channel of all the default user's files.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_index
@@ -132,11 +128,38 @@ func (c *Canvas) Files(opts ...Option) <-chan *File {
 	return filesChannel(c.client, "/users/self/files", ConcurrentErrorHandler, opts, nil)
 }
 
+// ListFiles will return a slice of the current user's files.
+func (c *Canvas) ListFiles(opts ...Option) ([]*File, error) {
+	return listFiles(c.client, "/users/self/files", nil, opts)
+}
+
+// ListFiles will return a slice of the current user's files.
+func ListFiles(opts ...Option) ([]*File, error) { return defaultCanvas.ListFiles(opts...) }
+
 // Files will return a channel of all the default user's files.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_index
-func Files(opts ...Option) <-chan *File {
-	return defaultCanvas.Files(opts...)
+func Files(opts ...Option) <-chan *File { return defaultCanvas.Files(opts...) }
+
+// Folders returns a channel of folders for the current user.
+func (c *Canvas) Folders(opts ...Option) <-chan *Folder {
+	return foldersChannel(
+		c.client,
+		"/users/self/folders",
+		ConcurrentErrorHandler,
+		opts, nil,
+	)
 }
+
+// Folders returns a channel of folders for the current user.
+func Folders(opts ...Option) <-chan *Folder { return defaultCanvas.Folders(opts...) }
+
+// ListFolders will return a slice of the current user's folders
+func (c *Canvas) ListFolders(opts ...Option) ([]*Folder, error) {
+	return listFolders(c.client, "/users/self/folders", nil, opts)
+}
+
+// ListFolders will return a slice of the current user's folders
+func ListFolders(opts ...Option) ([]*Folder, error) { return defaultCanvas.ListFolders(opts...) }
 
 // FolderPath will get a list of folders in the path given.
 func (c *Canvas) FolderPath(path string) ([]*Folder, error) {
@@ -145,18 +168,30 @@ func (c *Canvas) FolderPath(path string) ([]*Folder, error) {
 }
 
 // FolderPath will get a list of folders in the path given.
-func FolderPath(path string) ([]*Folder, error) {
-	return defaultCanvas.FolderPath(path)
+func FolderPath(path string) ([]*Folder, error) { return defaultCanvas.FolderPath(path) }
+
+// CreateFolder will create a new folder.
+func (c *Canvas) CreateFolder(path string, opts ...Option) (*Folder, error) {
+	dir, name := filepath.Split(path)
+	return createFolder(c.client, dir, name, opts, "/users/self/folders")
+}
+
+// CreateFolder will create a new folder.
+func CreateFolder(path string, opts ...Option) (*Folder, error) {
+	return defaultCanvas.CreateFolder(path, opts...)
 }
 
 // UploadFile uploads a file to the current user's files.
 func (c *Canvas) UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
-	path := fmt.Sprintf("/users/self/files")
-	return uploadFile(c.client, filename, r, path, opts)
+	return uploadFile(c.client, filename, r, "/users/self/files", opts)
 }
 
 // UploadFile uploads a file to the current user's files.
-func UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
+func UploadFile(
+	filename string,
+	r io.Reader,
+	opts ...Option,
+) (*File, error) {
 	return defaultCanvas.UploadFile(filename, r, opts...)
 }
 

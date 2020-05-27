@@ -111,7 +111,7 @@ func (c *Course) UpdateSettings(settings *CourseSettings) (*CourseSettings, erro
 	for k, v := range m {
 		vals[k] = []string{fmt.Sprintf("%v", v)}
 	}
-	resp, err := put(c.client, fmt.Sprintf("/courses/%d/settings", c.ID), vals)
+	resp, err := put(c.client, c.id("/courses/%d/settings"), vals)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (c *Course) CreateAssignment(a Assignment, opts ...Option) (*Assignment, er
 		return nil, err
 	}
 	in.addOpts(opts)
-	resp, err := post(c.client, fmt.Sprintf("/courses/%d/assignments", c.ID), in)
+	resp, err := post(c.client, c.id("/courses/%d/assignments"), in)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func (c *Course) Activity() (res interface{}, err error) {
 
 // Files returns a channel of all the course's files
 func (c *Course) Files(opts ...Option) <-chan *File {
-	return filesChannel(c.client, fmt.Sprintf("/courses/%d/files", c.ID), c.errorHandler, opts, nil)
+	return filesChannel(c.client, c.id("/courses/%d/files"), c.errorHandler, opts, nil)
 }
 
 // File will get a specific file id.
@@ -398,19 +398,7 @@ func (c *Course) File(id int, opts ...Option) (*File, error) {
 
 // ListFiles returns a slice of files for the course.
 func (c *Course) ListFiles(opts ...Option) ([]*File, error) {
-	ch := make(chan *File)
-	p := c.filespager(ch, opts)
-	files := make([]*File, 0)
-	p.start()
-	for {
-		select {
-		case file := <-ch:
-			files = append(files, file)
-		case err := <-p.errs:
-			close(ch)
-			return files, err
-		}
-	}
+	return listFiles(c.client, c.id("courses/%d/files"), nil, opts)
 }
 
 // Folders will retrieve the course's folders.
@@ -433,19 +421,13 @@ func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 // ListFolders returns a slice of folders for the course.
 // https://canvas.instructure.com/doc/api/files.html#method.folders.list_all_folders
 func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
-	ch := make(chan *Folder)
-	p := c.folderspager(ch, opts)
-	folders := make([]*Folder, 0)
-	p.start()
-	for {
-		select {
-		case folder := <-ch:
-			folders = append(folders, folder)
-		case err := <-p.errs:
-			close(ch)
-			return folders, err
-		}
-	}
+	return listFolders(c.client, c.id("/courses/%d/folders"), nil, opts)
+}
+
+// FolderPath will split the path and return a list containing all of the folders in the path.
+func (c *Course) FolderPath(path string) ([]*Folder, error) {
+	path = filepath.Join(c.id("/courses/%d/folders/by_path"), path)
+	return folderList(c.client, path)
 }
 
 // CreateFolder will create a new folder
@@ -453,6 +435,12 @@ func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
 func (c *Course) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)
 	return createFolder(c.client, dir, name, opts, "courses/%d/folders", c.ID)
+}
+
+// UploadFile will upload a file to the course.
+// https://canvas.instructure.com/doc/api/courses.html#method.courses.create_file
+func (c *Course) UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
+	return uploadFile(c.client, filename, r, c.id("/courses/%d/files"), opts)
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -622,8 +610,7 @@ type QuizPermissions struct {
 
 func (c *Course) filespager(ch chan *File, params []Option) *paginated {
 	return newPaginatedList(
-		c.client,
-		fmt.Sprintf("courses/%d/files", c.ID),
+		c.client, c.id("/courses/%d/files"),
 		sendFilesFunc(c.client, ch, nil),
 		params,
 	)
@@ -631,8 +618,7 @@ func (c *Course) filespager(ch chan *File, params []Option) *paginated {
 
 func (c *Course) folderspager(ch chan *Folder, params []Option) *paginated {
 	return newPaginatedList(
-		c.client,
-		fmt.Sprintf("courses/%d/folders", c.ID),
+		c.client, c.id("/courses/%d/folders"),
 		sendFoldersFunc(c.client, ch, nil),
 		params,
 	)
@@ -640,7 +626,7 @@ func (c *Course) folderspager(ch chan *Folder, params []Option) *paginated {
 
 func (c *Course) assignmentspager(ch chan *Assignment, params []Option) *paginated {
 	return newPaginatedList(
-		c.client, fmt.Sprintf("/courses/%d/assignments", c.ID),
+		c.client, c.id("/courses/%d/assignments"),
 		func(r io.Reader) error {
 			asses := make([]*Assignment, 0, 10)
 			err := json.NewDecoder(r).Decode(&asses)
@@ -736,4 +722,8 @@ func timeToStringDecodeFunc(format string) mapstructure.DecodeHookFunc {
 		date := data.(*time.Time)
 		return date.Format(format), nil
 	}
+}
+
+func (c *Course) id(s string) string {
+	return fmt.Sprintf(s, c.ID)
 }

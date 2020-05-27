@@ -121,6 +121,22 @@ func TestCreateFolder(t *testing.T) {
 	}
 }
 
+func TestFolderPath(t *testing.T) {
+	fs, err := FolderPath("/")
+	if err != nil {
+		t.Error(err)
+	}
+	folder := fs[0]
+	for f := range folder.Files() {
+		if f.folder != folder {
+			t.Error("did not save folder")
+		}
+		if f.Path() != folder.FullName {
+			t.Error("got wrong path")
+		}
+	}
+}
+
 func TestFilesFolders(t *testing.T) {
 	c := testCourse()
 	folder, err := c.Folder(19926068)
@@ -129,7 +145,7 @@ func TestFilesFolders(t *testing.T) {
 	}
 	byPath, err := FolderPath("/testfolder/another")
 	if len(byPath) != 3 {
-		t.Error("expected three folders")
+		t.Errorf("expected 3 folders; got %d", len(byPath))
 	}
 
 	parent, err := folder.ParentFolder()

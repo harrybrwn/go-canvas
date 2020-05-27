@@ -11,3 +11,4 @@ gen/
 
 # Tools
 *.swp
+interfaces.go
