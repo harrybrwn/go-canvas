@@ -419,6 +419,13 @@ func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 	return f, getjson(c.client, f, optEnc(opts), path)
 }
 
+// Root will get the root folder for the course.
+func (c *Course) Root(opts ...Option) (*Folder, error) {
+	f := &Folder{client: c.client}
+	path := c.id("/courses/%d/folders/root")
+	return f, getjson(c.client, f, optEnc(opts), path)
+}
+
 // ListFolders returns a slice of folders for the course.
 // https://canvas.instructure.com/doc/api/files.html#method.folders.list_all_folders
 func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {

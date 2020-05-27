@@ -171,6 +171,17 @@ func (c *Canvas) FolderPath(folderpath string) ([]*Folder, error) {
 // FolderPath will get a list of folders in the path given.
 func FolderPath(path string) ([]*Folder, error) { return defaultCanvas.FolderPath(path) }
 
+// Root will get the current user's root folder
+func (c *Canvas) Root(opts ...Option) (*Folder, error) {
+	f := &Folder{client: c.client}
+	return f, getjson(c.client, f, optEnc(opts), "/users/self/folders/root")
+}
+
+// Root will get the current user's root folder
+func Root(opts ...Option) (*Folder, error) {
+	return defaultCanvas.Root(opts...)
+}
+
 // CreateFolder will create a new folder.
 func (c *Canvas) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)

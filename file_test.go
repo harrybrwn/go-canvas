@@ -14,6 +14,20 @@ import (
 	"github.com/matryer/is"
 )
 
+var courseRoot *Folder
+
+func testCourseRoot() *Folder {
+	var err error
+	if courseRoot == nil {
+		c := testCourse()
+		courseRoot, err = c.Root()
+		if err != nil {
+			panic(err)
+		}
+	}
+	return courseRoot
+}
+
 func TestCourse_Files(t *testing.T) {
 	is := is.New(t)
 	c := testCourse()
@@ -137,6 +151,32 @@ func TestFolderPath(t *testing.T) {
 		if f.Path() != folder.FullName {
 			t.Error("got wrong path")
 		}
+	}
+}
+
+func TestRoot(t *testing.T) {
+	f := testCourseRoot()
+	if f.Name() != "course files" {
+		t.Error("this is the wrong folder")
+	}
+
+	u, err := testUser()
+	if err != nil {
+		t.Error(err)
+	}
+	f, err = u.Root()
+	if err != nil {
+		t.Error(err)
+	}
+	if f.Name() != "my files" {
+		t.Error("got the wrong folder")
+	}
+	root, err := Root()
+	if err != nil {
+		t.Error(err)
+	}
+	if f.ID != root.ID {
+		t.Error("these should be the same folder")
 	}
 }
 

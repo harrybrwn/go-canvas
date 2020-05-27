@@ -74,6 +74,12 @@ func (u *User) Folders(opts ...Option) <-chan *Folder {
 	)
 }
 
+// Root will get the root folder for the user's files.
+func (u *User) Root(opts ...Option) (*Folder, error) {
+	f := &Folder{client: u.client}
+	return f, getjson(u.client, f, optEnc(opts), "/users/%d/folders/root", u.ID)
+}
+
 // ListFolders will return a slice of all the user's folders
 func (u *User) ListFolders(opts ...Option) ([]*Folder, error) {
 	return listFolders(u.client, u.id("/users/%d/folders"), nil, opts)
