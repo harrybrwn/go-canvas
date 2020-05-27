@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -425,16 +426,16 @@ func (c *Course) ListFolders(opts ...Option) ([]*Folder, error) {
 }
 
 // FolderPath will split the path and return a list containing all of the folders in the path.
-func (c *Course) FolderPath(path string) ([]*Folder, error) {
-	path = filepath.Join(c.id("/courses/%d/folders/by_path"), path)
-	return folderList(c.client, path)
+func (c *Course) FolderPath(pth string) ([]*Folder, error) {
+	pth = path.Join(c.id("/courses/%d/folders/by_path"), pth)
+	return folderList(c.client, pth)
 }
 
 // CreateFolder will create a new folder
 // https://canvas.instructure.com/doc/api/files.html#method.folders.create
 func (c *Course) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)
-	return createFolder(c.client, dir, name, opts, "courses/%d/folders", c.ID)
+	return createFolder(c.client, dir, name, opts, "/courses/%d/folders", c.ID)
 }
 
 // UploadFile will upload a file to the course.

@@ -126,6 +126,9 @@ func TestFolderPath(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	if len(fs) < 1 {
+		t.Fatalf("folder path length should be 1 not %d", len(fs))
+	}
 	folder := fs[0]
 	for f := range folder.Files() {
 		if f.folder != folder {

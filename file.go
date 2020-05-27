@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -113,13 +114,8 @@ func (f *File) ParentFolder() (*Folder, error) {
 
 // PublicURL will get the file's public url.
 func (f *File) PublicURL() (string, error) {
-	resp, err := get(f.client, fmt.Sprintf("/files/%d/public_url", f.ID), nil)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
 	m := make(map[string]interface{})
-	if err = json.NewDecoder(resp.Body).Decode(&m); err != nil {
+	if err := getjson(f.client, &m, nil, "/files/%d/public_url", f.ID); err != nil {
 		return "", err
 	}
 	u, ok := m["public_url"]
@@ -211,6 +207,32 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 
 func (f *File) strID() string {
 	return fmt.Sprintf("%d", f.ID)
+}
+
+// JoinFileObjs will join a file channel and a folder channel into a generic
+// file objects channel.
+func JoinFileObjs(files <-chan *File, folders <-chan *Folder) <-chan FileObj {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	ch := make(chan FileObj)
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+	go func() {
+		defer wg.Done()
+		for file := range files {
+			ch <- file
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for folder := range folders {
+			ch <- folder
+		}
+	}()
+	return ch
 }
 
 // Folder is a folder
@@ -555,7 +577,6 @@ func listFiles(d doer, path string, parent *Folder, opts []Option) ([]*File, err
 
 func listFolders(d doer, path string, parent *Folder, opts []Option) ([]*Folder, error) {
 	ch := make(chan *Folder)
-	// p := c.folderspager(ch, opts)
 	page := newPaginatedList(d, path, sendFoldersFunc(d, ch, nil), opts)
 	folders := make([]*Folder, 0)
 	errs := page.start()

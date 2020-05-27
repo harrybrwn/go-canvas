@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 )
@@ -162,9 +163,9 @@ func (c *Canvas) ListFolders(opts ...Option) ([]*Folder, error) {
 func ListFolders(opts ...Option) ([]*Folder, error) { return defaultCanvas.ListFolders(opts...) }
 
 // FolderPath will get a list of folders in the path given.
-func (c *Canvas) FolderPath(path string) ([]*Folder, error) {
-	path = filepath.Join("/users/self/folders/by_path", path)
-	return folderList(c.client, path)
+func (c *Canvas) FolderPath(folderpath string) ([]*Folder, error) {
+	folderpath = path.Join("/users/self/folders/by_path", folderpath)
+	return folderList(c.client, folderpath)
 }
 
 // FolderPath will get a list of folders in the path given.

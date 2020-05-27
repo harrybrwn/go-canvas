@@ -3,6 +3,7 @@ package canvas
 import (
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"time"
 )
@@ -44,7 +45,7 @@ func (u *User) Settings() (settings map[string]interface{}, err error) {
 
 // Courses will return the user's courses.
 func (u *User) Courses(opts ...Option) ([]*Course, error) {
-	return getCourses(u.client, fmt.Sprintf("/users/%d/courses", u.ID), optEnc(opts))
+	return getCourses(u.client, u.id("/users/%d/courses"), optEnc(opts))
 }
 
 // File will get a user's file by id
@@ -55,37 +56,33 @@ func (u *User) File(id int, opts ...Option) (*File, error) {
 // Files will return a channel of files.
 func (u *User) Files(opts ...Option) <-chan *File {
 	return filesChannel(
-		u.client,
-		fmt.Sprintf("/users/%d/files", u.ID),
-		ConcurrentErrorHandler,
-		opts, nil,
+		u.client, u.id("/users/%d/files"),
+		ConcurrentErrorHandler, opts, nil,
 	)
 }
 
 // ListFiles will collect all of the users files.
 func (u *User) ListFiles(opts ...Option) ([]*File, error) {
-	return listFiles(u.client, fmt.Sprintf("/users/%d/files", u.ID), nil, opts)
+	return listFiles(u.client, u.id("/users/%d/files"), nil, opts)
 }
 
 // Folders returns a channel of the user's folders.
 func (u *User) Folders(opts ...Option) <-chan *Folder {
 	return foldersChannel(
-		u.client,
-		fmt.Sprintf("/users/%d/folders", u.ID),
-		ConcurrentErrorHandler,
-		opts, nil,
+		u.client, u.id("/users/%d/folders"),
+		ConcurrentErrorHandler, opts, nil,
 	)
 }
 
 // ListFolders will return a slice of all the user's folders
 func (u *User) ListFolders(opts ...Option) ([]*Folder, error) {
-	return listFolders(u.client, fmt.Sprintf("/users/%d/folders", u.ID), nil, opts)
+	return listFolders(u.client, u.id("/users/%d/folders"), nil, opts)
 }
 
 // FolderPath will split the path and return a list containing all of the folders in the path.
-func (u *User) FolderPath(path string) ([]*Folder, error) {
-	path = filepath.Join(fmt.Sprintf("/users/%d/folders/by_path", u.ID), path)
-	return folderList(u.client, path)
+func (u *User) FolderPath(pth string) ([]*Folder, error) {
+	pth = path.Join(u.id("/users/%d/folders/by_path"), pth)
+	return folderList(u.client, pth)
 }
 
 // UploadFile will upload the contents of an io.Reader to a
@@ -95,8 +92,7 @@ func (u *User) UploadFile(
 	r io.Reader,
 	opts ...Option,
 ) (*File, error) {
-	path := fmt.Sprintf("/users/%d/files", u.ID)
-	return uploadFile(u.client, filename, r, path, opts)
+	return uploadFile(u.client, filename, r, u.id("/users/%d/files"), opts)
 }
 
 // CreateFolder will create a new folder.
@@ -241,4 +237,8 @@ func (u *User) SetColor(asset, hexcode string) error {
 func getUserFile(d doer, id int, userid interface{}, opts optEnc) (*File, error) {
 	f := &File{client: d}
 	return f, getjson(d, f, opts, "/users/%v/files/%d", userid, id)
+}
+
+func (u *User) id(s string) string {
+	return fmt.Sprintf(s, u.ID)
 }

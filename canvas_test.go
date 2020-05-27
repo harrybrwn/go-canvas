@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -53,20 +54,7 @@ func testCourse() Course {
 	return *testingCourse
 }
 
-type thing struct {
-	ID int `json:"id"`
-}
-
-func (t *thing) id(s string) string {
-	return fmt.Sprintf(s, t.ID)
-}
-
 func Test(t *testing.T) {
-	th := thing{}
-	b := []byte(`{"id": 123}`)
-	json.Unmarshal(b, &th)
-	fmt.Println(th)
-	fmt.Println(th.id("/path/%d/to/thign"))
 }
 
 func TestAssignments(t *testing.T) {
@@ -185,6 +173,23 @@ func TestUser_Err(t *testing.T) {
 
 	err = u.SetColor(col, "#FFFFFF")
 	is.True(err != nil)
+	ConcurrentErrorHandler = func(e error) error {
+		if e == nil {
+			t.Error("expected an error")
+		}
+		return e
+	}
+	i := 0
+	for f := range JoinFileObjs(u.Files(), u.Folders()) {
+		if f.GetID() == 0 {
+			t.Error("got bad id")
+		}
+		i++
+	}
+	if i != 0 {
+		t.Error("should not have gotten any files")
+	}
+	ConcurrentErrorHandler = defaultErrorHandler
 }
 
 func TestSearchUser(t *testing.T) {
@@ -229,6 +234,42 @@ func TestCourse_Settings(t *testing.T) {
 	}
 	if settings.HideFinalGrades == hidefinalgrades {
 		t.Error("hide final grades should be the opposite")
+	}
+}
+
+func TestCourseFileObjects(t *testing.T) {
+	c := testCourse()
+	folder, err := c.CreateFolder(path.Join("/", t.Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = folder.Rename(t.Name()); err != nil {
+		t.Error(err)
+	}
+	if folder.Foldername != t.Name() {
+		t.Errorf("could not rename the new file to %s", t.Name())
+	}
+
+	for f := range JoinFileObjs(c.Files(), c.Folders()) {
+		if f.GetID() == 0 {
+			t.Error("got a zero id")
+		}
+		if f.Name() == "" {
+			t.Error("got an empty name")
+		}
+	}
+	list, err := c.ListFiles(Opt("search_term", "main.go"))
+	if err != nil {
+		t.Error(err)
+	}
+	if len(list) < 1 {
+		t.Error("could not find main.go")
+	}
+	if err = list[0].Copy(folder); err != nil {
+		t.Error(err)
+	}
+	if err = folder.Delete(Opt("force", true)); err != nil {
+		t.Error(err)
 	}
 }
 
