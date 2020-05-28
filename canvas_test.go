@@ -71,11 +71,11 @@ func TestAssignments(t *testing.T) {
 		t.Error("should have one assignment")
 	}
 
-	tm := time.Now()
+	now := time.Now().UTC()
 	newass, err := c.CreateAssignment(Assignment{
 		Name:        "runtime test assignment",
 		Description: "this is a test assignment that has been generated durning testing",
-		DueAt:       &tm,
+		DueAt:       now,
 	})
 	is.NoErr(err)
 	if newass == nil {
@@ -83,6 +83,9 @@ func TestAssignments(t *testing.T) {
 	}
 	if newass.ID == 0 {
 		t.Error("got a bad id, could not create assignment")
+	}
+	if !newass.DueAt.Equal(now.Round(time.Second)) { // canvas' servers round to the second
+		t.Errorf("due date should not have changed after response; got %v, want %v", newass.DueAt, now)
 	}
 
 	asses, err := c.ListAssignments(IncludeOpt("overrides"))
