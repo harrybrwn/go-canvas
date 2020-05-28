@@ -96,6 +96,7 @@ func newV1Req(method, urlpath, query string) *http.Request {
 		Method: method,
 		Proto:  "HTTP/1.1",
 		URL: &url.URL{
+			Scheme:   "https",
 			Path:     path.Join("/api/v1", urlpath),
 			RawQuery: query,
 		},
@@ -132,7 +133,6 @@ func (a *auth) RoundTrip(req *http.Request) (*http.Response, error) {
 		// TODO: don't do this, it has caused my too much pain
 		req.Host = a.host
 		req.URL.Host = a.host
-		req.URL.Scheme = "https"
 	}
 	return a.rt.RoundTrip(req)
 }

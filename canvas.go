@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"path"
 	"path/filepath"
 	"time"
+
+	"github.com/google/go-querystring/query"
 )
 
 var (
@@ -278,31 +281,34 @@ func SearchAccounts(term string, opts ...Option) ([]Account, error) {
 }
 
 // Announcements will get the announcements
+// https://canvas.instructure.com/doc/api/all_resources.html#method.announcements_api.index
 func (c *Canvas) Announcements(
 	contextCodes []string,
 	opts ...Option,
-) (arr []DiscussionTopic, err error) {
-	p := params{"context_codes": contextCodes}
-	p.Add(opts)
-	return arr, getjson(c.client, &arr, p, "/announcements")
+) (arr []*DiscussionTopic, err error) {
+	opts = append(opts, Opt("context_codes[]", contextCodes))
+	ch := make(chan *DiscussionTopic)
+	pager := newPaginatedList(
+		c.client, "/announcements",
+		sendDiscussionTopicFunc(ch), opts)
+	arr = make([]*DiscussionTopic, 0)
+	errs := pager.start()
+	for {
+		select {
+		case an := <-ch:
+			arr = append(arr, an)
+		case err := <-errs:
+			return arr, err
+		}
+	}
 }
 
 // Announcements will get the announcements
 func Announcements(
 	contextCodes []string,
 	opts ...Option,
-) ([]DiscussionTopic, error) {
+) ([]*DiscussionTopic, error) {
 	return defaultCanvas.Announcements(contextCodes, opts...)
-}
-
-// CalendarEvents makes a call to get calendar events.
-func (c *Canvas) CalendarEvents(opts ...Option) (cal []CalendarEvent, err error) {
-	return cal, getjson(c.client, &cal, optEnc(opts), "/calendar_events")
-}
-
-// CalendarEvents makes a call to get calendar events.
-func CalendarEvents(opts ...Option) ([]CalendarEvent, error) {
-	return defaultCanvas.CalendarEvents(opts...)
 }
 
 // DiscussionTopic is a discussion topic
@@ -348,39 +354,154 @@ type DiscussionTopic struct {
 	SortByRating       bool `json:"sort_by_rating"`
 }
 
+// CalendarEvents makes a call to get calendar events.
+func (c *Canvas) CalendarEvents(opts ...Option) (cal []*CalendarEvent, err error) {
+	ch := make(chan *CalendarEvent)
+	pager := newPaginatedList(c.client, "/calendar_events", func(r io.Reader) error {
+		evs := make([]*CalendarEvent, 0)
+		if err := json.NewDecoder(r).Decode(&evs); err != nil {
+			return err
+		}
+		for _, e := range evs {
+			ch <- e
+		}
+		return nil
+	}, opts)
+	errs := pager.start()
+	events := make([]*CalendarEvent, 0)
+	for {
+		select {
+		case event := <-ch:
+			events = append(events, event)
+		case err := <-errs:
+			return events, err
+		}
+	}
+}
+
+// CalendarEvents makes a call to get calendar events.
+func CalendarEvents(opts ...Option) ([]*CalendarEvent, error) {
+	return defaultCanvas.CalendarEvents(opts...)
+}
+
+type calendarEventOptions struct {
+	CalendarEvent `url:"calendar_event"`
+}
+
+// CreateCalendarEvent will send a calendar event to canvas to be created.
+// https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.create
+func (c *Canvas) CreateCalendarEvent(event *CalendarEvent) (*CalendarEvent, error) {
+	// TODO: figure out how to send theses fields:
+	// 	- calendar_event[child_event_data][X][start_at]
+	// 	- calendar_event[duplicate][count]
+	// 	- calendar_event[duplicate][interval]
+	// 	- calendar_event[duplicate][frequency]
+	// see https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.create
+	q, err := query.Values(&calendarEventOptions{*event})
+	if err != nil {
+		return nil, err
+	}
+	resp, err := post(c.client, "/calendar_events", q)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	cal := &CalendarEvent{}
+	return cal, json.NewDecoder(resp.Body).Decode(cal)
+}
+
+// CreateCalendarEvent will send a calendar event to canvas to be created.
+// https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.create
+func CreateCalendarEvent(event *CalendarEvent) (*CalendarEvent, error) {
+	return defaultCanvas.CreateCalendarEvent(event)
+}
+
+// UpdateCalendarEvent will update a calendar event. This operation will change
+// event given as an argument.
+// https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.update
+func (c *Canvas) UpdateCalendarEvent(event *CalendarEvent) error {
+	q, err := query.Values(&calendarEventOptions{*event})
+	if err != nil {
+		return err
+	}
+	resp, err := put(c.client, fmt.Sprintf("/calendar_events/%d", event.ID), q)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return json.NewDecoder(resp.Body).Decode(event)
+}
+
+// UpdateCalendarEvent will update a calendar event. This operation will change
+// event given as an argument.
+// https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.update
+func UpdateCalendarEvent(event *CalendarEvent) error {
+	return defaultCanvas.UpdateCalendarEvent(event)
+}
+
+// DeleteCalendarEventByID will delete a calendar event given its ID.
+// This operation returns the calendar event that was deleted.
+func (c *Canvas) DeleteCalendarEventByID(id int, opts ...Option) (*CalendarEvent, error) {
+	resp, err := delete(c.client, fmt.Sprintf("/calendar_events/%d", id), optEnc(opts))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	e := &CalendarEvent{}
+	return e, json.NewDecoder(resp.Body).Decode(e)
+}
+
+// DeleteCalendarEventByID will delete a calendar event given its ID.
+// This operation returns the calendar event that was deleted.
+func DeleteCalendarEventByID(id int, opts ...Option) (*CalendarEvent, error) {
+	return defaultCanvas.DeleteCalendarEventByID(id, opts...)
+}
+
+// DeleteCalendarEvent will delete the calendar event and
+// return the calendar event deleted.
+func (c *Canvas) DeleteCalendarEvent(e *CalendarEvent) (*CalendarEvent, error) {
+	return c.DeleteCalendarEventByID(e.ID)
+}
+
+// DeleteCalendarEvent will delete the calendar event and
+// return the calendar event deleted.
+func DeleteCalendarEvent(e *CalendarEvent) (*CalendarEvent, error) {
+	return defaultCanvas.DeleteCalendarEventByID(e.ID)
+}
+
 // CalendarEvent is a calendar event
 type CalendarEvent struct {
-	ID                         string      `json:"id"`
-	Title                      string      `json:"title"`
-	StartAt                    string      `json:"start_at"`
-	EndAt                      string      `json:"end_at"`
-	Description                string      `json:"description"`
-	LocationName               string      `json:"location_name"`
-	LocationAddress            string      `json:"location_address"`
-	ContextCode                string      `json:"context_code"`
-	EffectiveContextCode       interface{} `json:"effective_context_code"`
-	AllContextCodes            string      `json:"all_context_codes"`
-	WorkflowState              string      `json:"workflow_state"`
-	Hidden                     bool        `json:"hidden"`
-	ParentEventID              interface{} `json:"parent_event_id"`
-	ChildEventsCount           int         `json:"child_events_count"`
-	ChildEvents                interface{} `json:"child_events"`
-	URL                        string      `json:"url"`
-	HTMLURL                    string      `json:"html_url"`
-	AllDayDate                 string      `json:"all_day_date"`
-	AllDay                     bool        `json:"all_day"`
-	CreatedAt                  string      `json:"created_at"`
-	UpdatedAt                  string      `json:"updated_at"`
-	AppointmentGroupID         interface{} `json:"appointment_group_id"`
-	AppointmentGroupURL        interface{} `json:"appointment_group_url"`
-	OwnReservation             bool        `json:"own_reservation"`
-	ReserveURL                 string      `json:"reserve_url"`
-	Reserved                   bool        `json:"reserved"`
-	ParticipantType            string      `json:"participant_type"`
-	ParticipantsPerAppointment interface{} `json:"participants_per_appointment"`
-	AvailableSlots             interface{} `json:"available_slots"`
-	User                       *User       `json:"user"`
-	Group                      interface{} `json:"group"`
+	ID                         int         `json:"id" url:"-"`
+	Title                      string      `json:"title" url:"title,omitempty"`
+	ContextCode                string      `json:"context_code" url:"context_code,omitempty"`
+	StartAt                    time.Time   `json:"start_at" url:"start_at,omitempty"`
+	EndAt                      time.Time   `json:"end_at" url:"end_at,omitempty"`
+	CreatedAt                  time.Time   `json:"created_at" url:"-"`
+	UpdatedAt                  time.Time   `json:"updated_at" url:"-"`
+	Description                string      `json:"description" url:"description,omitempty"`
+	LocationName               string      `json:"location_name" url:"location_name,omitempty"`
+	LocationAddress            string      `json:"location_address" url:"location_address,omitempty"`
+	EffectiveContextCode       interface{} `json:"effective_context_code" url:"effective_context_code,omitempty"`
+	AllDay                     bool        `json:"all_day" url:"all_day,omitempty"`
+	AllContextCodes            string      `json:"all_context_codes" url:"-"`
+	WorkflowState              string      `json:"workflow_state" url:"-"`
+	Hidden                     bool        `json:"hidden" url:"-"`
+	ParentEventID              interface{} `json:"parent_event_id" url:"-"`
+	ChildEventsCount           int         `json:"child_events_count" url:"-"`
+	ChildEvents                interface{} `json:"child_events" url:"-"`
+	URL                        string      `json:"url" url:"-"`
+	HTMLURL                    string      `json:"html_url" url:"-"`
+	AllDayDate                 string      `json:"all_day_date" url:"-"`
+	AppointmentGroupID         interface{} `json:"appointment_group_id" url:"-"`
+	AppointmentGroupURL        string      `json:"appointment_group_url" url:"-"`
+	OwnReservation             bool        `json:"own_reservation" url:"-"`
+	ReserveURL                 string      `json:"reserve_url" url:"-"`
+	Reserved                   bool        `json:"reserved" url:"-"`
+	ParticipantType            string      `json:"participant_type" url:"-"`
+	ParticipantsPerAppointment interface{} `json:"participants_per_appointment" url:"-"`
+	AvailableSlots             interface{} `json:"available_slots" url:"-"`
+	User                       *User       `json:"user" url:"-"`
+	Group                      interface{} `json:"group" url:"-"`
 }
 
 // Conversations returns a list of conversations
@@ -502,4 +623,17 @@ func getAccounts(d doer, path string, opts []Option) (accts []Account, err error
 		accts[i].cli = d
 	}
 	return
+}
+
+func sendDiscussionTopicFunc(ch chan *DiscussionTopic) sendFunc {
+	return func(r io.Reader) error {
+		discs := make([]*DiscussionTopic, 0)
+		if err := json.NewDecoder(r).Decode(&discs); err != nil {
+			return err
+		}
+		for _, d := range discs {
+			ch <- d
+		}
+		return nil
+	}
 }

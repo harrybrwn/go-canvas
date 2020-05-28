@@ -227,6 +227,24 @@ func (c *Course) EditAssignment(a *Assignment) (*Assignment, error) {
 	return newas, json.NewDecoder(resp.Body).Decode(newas)
 }
 
+// GradingType is a grading type
+type GradingType string
+
+const (
+	// PassFail is the grading type for pass fail assignments
+	PassFail GradingType = "pass_fail"
+	// Percent is the grading type for percent graded assignments
+	Percent GradingType = "percent"
+	// LetterGrade is the grading type for letter grade assignments
+	LetterGrade GradingType = "letter_grade"
+	// GPAScale is the grading type for GPA scale assignments
+	GPAScale GradingType = "gpa_scale"
+	// Points is the grading type for point graded assignments
+	Points GradingType = "points"
+	// NotGraded is the grading type for assignments that are not graded
+	NotGraded GradingType = "not_graded"
+)
+
 type assignmentOptions struct {
 	Assignment `url:"assignment"`
 }
@@ -266,6 +284,7 @@ type Assignment struct {
 	GradingType                    GradingType       `json:"grading_type" url:"grading_type,omitempty"`
 	GradingStandardID              interface{}       `json:"grading_standard_id" url:"grading_standard_id,omitempty"`
 	Published                      bool              `json:"published" url:"published,omitempty"`
+	SisAssignmentID                string            `json:"sis_assignment_id" url:"sis_assignment_id,omitempty"`
 
 	PeerReviewCount            int         `json:"peer_review_count" url:"-"`
 	AllDates                   interface{} `json:"all_dates" url:"-"`
@@ -281,28 +300,24 @@ type Assignment struct {
 		SectionID         string `json:"section_id" url:"-"`
 		NeedsGradingCount int    `json:"needs_grading_count" url:"-"`
 	} `json:"needs_grading_count_by_section" url:"-"`
-
-	PostToSis bool `json:"post_to_sis" url:"-"`
-
-	HasSubmittedSubmissions bool `json:"has_submitted_submissions" url:"-"`
-	Unpublishable           bool `json:"unpublishable" url:"-"`
-
-	LockedForUser   bool      `json:"locked_for_user" url:"-"`
-	LockInfo        *LockInfo `json:"lock_info" url:"-"`
-	LockExplanation string    `json:"lock_explanation" url:"-"`
-
-	QuizID               int              `json:"quiz_id" url:"-"`
-	AnonymousSubmissions bool             `json:"anonymous_submissions" url:"-"`
-	DiscussionTopic      *DiscussionTopic `json:"discussion_topic" url:"-"`
-	FreezeOnCopy         bool             `json:"freeze_on_copy" url:"-"`
-	Frozen               bool             `json:"frozen" url:"-"`
-	FrozenAttributes     []string         `json:"frozen_attributes" url:"-"`
-	Submission           *Submission      `json:"submission" url:"-"`
-	UseRubricForGrading  bool             `json:"use_rubric_for_grading" url:"-"`
-	RubricSettings       interface{}      `json:"rubric_settings" url:"-"`
-	Rubric               []RubricCriteria `json:"rubric" url:"-"`
-	AssignmentVisibility []int            `json:"assignment_visibility" url:"-"`
-	PostManually         bool             `json:"post_manually" url:"-"`
+	PostToSis               bool             `json:"post_to_sis" url:"-"`
+	HasSubmittedSubmissions bool             `json:"has_submitted_submissions" url:"-"`
+	Unpublishable           bool             `json:"unpublishable" url:"-"`
+	LockedForUser           bool             `json:"locked_for_user" url:"-"`
+	LockInfo                *LockInfo        `json:"lock_info" url:"-"`
+	LockExplanation         string           `json:"lock_explanation" url:"-"`
+	QuizID                  int              `json:"quiz_id" url:"-"`
+	AnonymousSubmissions    bool             `json:"anonymous_submissions" url:"-"`
+	DiscussionTopic         *DiscussionTopic `json:"discussion_topic" url:"-"`
+	FreezeOnCopy            bool             `json:"freeze_on_copy" url:"-"`
+	Frozen                  bool             `json:"frozen" url:"-"`
+	FrozenAttributes        []string         `json:"frozen_attributes" url:"-"`
+	Submission              *Submission      `json:"submission" url:"-"`
+	UseRubricForGrading     bool             `json:"use_rubric_for_grading" url:"-"`
+	RubricSettings          interface{}      `json:"rubric_settings" url:"-"`
+	Rubric                  []RubricCriteria `json:"rubric" url:"-"`
+	AssignmentVisibility    []int            `json:"assignment_visibility" url:"-"`
+	PostManually            bool             `json:"post_manually" url:"-"`
 
 	OmitFromFinalGrade              bool `json:"omit_from_final_grade" url:"omit_from_final_grade,omitempty"`
 	ModeratedGrading                bool `json:"moderated_grading" url:"moderated_grading,omitempty"`
@@ -356,36 +371,38 @@ type LockInfo struct {
 
 // AssignmentOverride is an assignment override object
 type AssignmentOverride struct {
-	ID              int       `json:"id"`
-	AssignmentID    int       `json:"assignment_id"`
-	StudentIds      []int     `json:"student_ids"`
-	GroupID         int       `json:"group_id"`
-	CourseSectionID int       `json:"course_section_id"`
-	Title           string    `json:"title"`
-	DueAt           time.Time `json:"due_at"`
-	AllDay          bool      `json:"all_day"`
-	AllDayDate      time.Time `json:"all_day_date"`
-	UnlockAt        time.Time `json:"unlock_at"`
-	LockAt          time.Time `json:"lock_at"`
+	ID              int       `json:"id" url:"-"`
+	Title           string    `json:"title" url:"title"`
+	StudentIds      []int     `json:"student_ids" url:"student_ids,brackets,omitempty"`
+	CourseSectionID int       `json:"course_section_id" url:"course_section_id"`
+	DueAt           time.Time `json:"due_at" url:"due_at,omitempty"`
+	UnlockAt        time.Time `json:"unlock_at" url:"unlock_at,omitempty"`
+	LockAt          time.Time `json:"lock_at" url:"lock_at,omitempty"`
+
+	AssignmentID int       `json:"assignment_id" url:"-"`
+	GroupID      int       `json:"group_id" url:"-"`
+	AllDay       bool      `json:"all_day" url:"-"`
+	AllDayDate   time.Time `json:"all_day_date" url:"-"`
 }
 
-// GradingType is a grading type
-type GradingType string
-
-const (
-	// PassFail is the grading type for pass fail assignments
-	PassFail GradingType = "pass_fail"
-	// Percent is the grading type for percent graded assignments
-	Percent GradingType = "percent"
-	// LetterGrade is the grading type for letter grade assignments
-	LetterGrade GradingType = "letter_grade"
-	// GPAScale is the grading type for GPA scale assignments
-	GPAScale GradingType = "gpa_scale"
-	// Points is the grading type for point graded assignments
-	Points GradingType = "points"
-	// NotGraded is the grading type for assignments that are not graded
-	NotGraded GradingType = "not_graded"
-)
+// DiscussionTopics return a list of the course discussion topics.
+func (c *Course) DiscussionTopics(opts ...Option) ([]*DiscussionTopic, error) {
+	ch := make(chan *DiscussionTopic)
+	pager := newPaginatedList(
+		c.client, fmt.Sprintf("/courses/%d/discussion_topics", c.ID),
+		sendDiscussionTopicFunc(ch), opts,
+	)
+	topics := make([]*DiscussionTopic, 0)
+	errs := pager.start()
+	for {
+		select {
+		case disc := <-ch:
+			topics = append(topics, disc)
+		case err := <-errs:
+			return topics, err
+		}
+	}
+}
 
 // Activity returns a course's activity data
 func (c *Course) Activity() (res interface{}, err error) {

@@ -84,7 +84,9 @@ func TestAssignments(t *testing.T) {
 	if newass.ID == 0 {
 		t.Error("got a bad id, could not create assignment")
 	}
-	if !newass.DueAt.Equal(now.Round(time.Second)) { // canvas' servers round to the second
+	now = now.Round(time.Second) // canvas' servers round to the second
+	// Sometimes the time given back is off by one second
+	if !(newass.DueAt.Equal(now) || newass.DueAt.Add(time.Second).Equal(now)) {
 		t.Errorf("due date should not have changed after response; got %v, want %v", newass.DueAt, now)
 	}
 
@@ -126,8 +128,8 @@ func TestAnnouncements(t *testing.T) {
 	is := is.New(t)
 	_, err := Announcements([]string{})
 	is.True(err != nil)
-	_, err = Announcements([]string{"course_1"})
-	is.NoErr(err)
+	code := fmt.Sprintf("course_%d", testCourse().ID)
+	_, err = Announcements([]string{code})
 }
 
 func TestCanvas_Err(t *testing.T) {
@@ -146,6 +148,37 @@ func TestCanvas_Err(t *testing.T) {
 		if courses != nil {
 			t.Error("expected nil courses")
 		}
+	}
+}
+
+func TestCalendarEvents(t *testing.T) {
+	course := testCourse()
+	contextCode := fmt.Sprintf("course_%d", course.ID)
+	now := time.Now().UTC()
+	event, err := CreateCalendarEvent(&CalendarEvent{
+		Title:       "test event",
+		Description: "this is a test event and should not exists, please delete me",
+		StartAt:     now,
+		AllDay:      true,
+		ContextCode: contextCode,
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	calendar, err := CalendarEvents(ArrayOpt("context_codes", contextCode))
+	if err != nil {
+		t.Error(err)
+	}
+	i := 0
+	for range calendar {
+		i++
+	}
+	if i != 2 {
+		t.Errorf("should have only 2 calendar events, got %d", i)
+	}
+	_, err = DeleteCalendarEvent(event)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
