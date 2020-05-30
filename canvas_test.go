@@ -3,7 +3,11 @@ package canvas
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -523,4 +527,73 @@ func copydoer(d doer) doer {
 		cli.Transport = a
 	}
 	return cli
+}
+
+func testServer() (*http.Client, *http.ServeMux, *httptest.Server) {
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	transport := &TestingTransport{&http.Transport{
+		Proxy: func(r *http.Request) (*url.URL, error) { return url.Parse(server.URL) },
+	}}
+	client := &http.Client{Transport: transport}
+	authorize(client, "", DefaultHost)
+	return client, mux, server
+}
+
+type TestingTransport struct {
+	transport http.RoundTripper
+}
+
+func (tt *TestingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.URL.Scheme = "http"
+	return tt.transport.RoundTrip(req)
+}
+
+func writeTestFile(t *testing.T, file string, w io.Writer) {
+	t.Helper()
+	b, err := ioutil.ReadFile(fmt.Sprintf("./testdata/%s", file))
+	if err != nil {
+		t.Error("could not read testdata")
+	}
+	if _, err = w.Write(b); err != nil {
+		t.Error("could not write test data:", err)
+	}
+}
+
+func swapCanvas(c *Canvas) func() {
+	reset := defaultCanvas
+	defaultCanvas = c
+	return func() {
+		defaultCanvas = reset
+	}
+}
+
+func assertMethod(t *testing.T, r *http.Request, method string) {
+	t.Helper()
+	if r.Method != method {
+		t.Errorf("wrong method: expected %s; got %s", method, r.Method)
+	}
+}
+
+func TestCurrentUser(t *testing.T) {
+	cli, mux, server := testServer()
+	defer server.Close()
+	mux.HandleFunc("/api/v1/users/self", func(w http.ResponseWriter, r *http.Request) {
+		assertMethod(t, r, "GET")
+		writeTestFile(t, "user.json", w)
+	})
+	canv := &Canvas{client: cli}
+	u, err := canv.CurrentUser()
+	if err != nil {
+		t.Error("could not get user:", err)
+	}
+	if u == nil {
+		t.Error("user is nil")
+	}
+	if u.ID != 2 {
+		t.Error("the testing user should have id == 2, not ", u.ID)
+	}
+	if u.client != cli {
+		t.Error("didn't pass the client along")
+	}
 }

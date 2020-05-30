@@ -4,11 +4,12 @@
 TODO
 
 # Data
-*.json
+*.params
 *.txt
-testdata/
 gen/
 
 # Tools
 *.swp
+
+# Testing
 interfaces.go

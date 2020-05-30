@@ -513,10 +513,9 @@ func createFolder(
 	respath string,
 	v ...interface{},
 ) (*Folder, error) {
-	parentpath, name := filepath.Split(path)
 	q := params{"name": {name}}
-	if parentpath != "" {
-		q.Set("parent_folder_path", parentpath)
+	if path != "" {
+		q.Set("parent_folder_path", path)
 	}
 	q.Add(opts)
 

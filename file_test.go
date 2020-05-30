@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -126,13 +127,34 @@ func TestFolders_Err(t *testing.T) {
 }
 
 func TestCreateFolder(t *testing.T) {
-	c := testCourse()
-	f, err := c.CreateFolder("/test_folder", IncludeOpt("user"))
+	client, mux, server := testServer()
+	defer server.Close()
+	mux.HandleFunc("/api/v1/users/self/folders", func(w http.ResponseWriter, r *http.Request) {
+		assertMethod(t, r, "POST")
+		q := r.URL.Query()
+		if q.Get("include[]") != "user" {
+			t.Error("expected user param")
+		}
+		name := q.Get("name")
+		parent := q.Get("parent_folder_path")
+		if parent != "/" {
+			t.Error("should have root folder in params list")
+		}
+		if name != "testfolder" {
+			t.Error("wrong folder name")
+		}
+		w.Write([]byte(fmt.Sprintf(`{"id":11,"name":"%s","full_name":"%s"}`, name, path.Join(parent, name))))
+	})
+	defer swapCanvas(&Canvas{client: client})()
+	f, err := CreateFolder("/testfolder", IncludeOpt("user"))
 	if err != nil {
 		t.Error(err)
 	}
-	if err = f.Delete(); err != nil {
-		t.Error(err)
+	if f.ID != 11 {
+		t.Error("wrong id")
+	}
+	if f.Foldername != "testfolder" {
+		t.Error("responded with wrong folder name")
 	}
 }
 
