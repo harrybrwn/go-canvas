@@ -13,7 +13,11 @@ import (
 )
 
 // ErrRateLimitExceeded is returned when the api rate limit has been reached.
-var ErrRateLimitExceeded = errors.New("403 Forbidden (Rate Limit Exceeded)")
+var (
+	ErrRateLimitExceeded = errors.New("403 Forbidden (Rate Limit Exceeded)")
+
+	apiPath = "/api/v1"
+)
 
 // IsRateLimit returns true if the error
 // given is a rate limit error.
@@ -26,6 +30,7 @@ func IsRateLimit(e error) bool {
 
 type client struct {
 	http.Client
+	host string
 }
 
 type doer interface {
@@ -97,13 +102,19 @@ func newV1Req(method, urlpath, query string) *http.Request {
 		Proto:  "HTTP/1.1",
 		URL: &url.URL{
 			Scheme:   "https",
-			Path:     path.Join("/api/v1", urlpath),
+			Path:     path.Join(apiPath, urlpath),
 			RawQuery: query,
 		},
 	}
 }
 
-func getjson(client doer, obj interface{}, vals encoder, path string, v ...interface{}) error {
+func getjson(
+	client doer,
+	obj interface{},
+	vals encoder,
+	path string,
+	v ...interface{},
+) error {
 	resp, err := get(client, fmt.Sprintf(path, v...), vals)
 	if err != nil {
 		return err
@@ -113,8 +124,12 @@ func getjson(client doer, obj interface{}, vals encoder, path string, v ...inter
 }
 
 func authorize(c *http.Client, token, host string) {
+	rt := http.DefaultTransport
+	if c.Transport != nil {
+		rt = c.Transport
+	}
 	c.Transport = &auth{
-		rt:    http.DefaultTransport,
+		rt:    rt,
 		token: token,
 		host:  host,
 	}

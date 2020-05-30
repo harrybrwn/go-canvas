@@ -24,10 +24,11 @@ var (
 	// If you do not want to stop all concurrent goroutines, this
 	// handler should return an non-nil error. If this handler returns
 	// nil then all goroutines will continue if they can.
+	// This function panics by default.
 	ConcurrentErrorHandler func(error) error = defaultErrorHandler
 
 	// DefaultUserAgent is the default user agent used to make requests.
-	DefaultUserAgent = "go-canvas"
+	DefaultUserAgent = "go-canvas v0.1"
 
 	// DefaultCanvas is the default canvas object
 	defaultCanvas *Canvas
@@ -117,6 +118,26 @@ func (c *Canvas) Todos() error {
 
 // Todos will get the current user's todo's.
 func Todos() error { return defaultCanvas.Todos() }
+
+// NewFile will make a new file object. This will not
+// send any data to canvas.
+func NewFile(filename string) *File { return defaultCanvas.NewFile(filename) }
+
+// NewFile will make a new file object. This will not
+// send any data to canvas.
+func (c *Canvas) NewFile(filename string) *File {
+	return &File{Filename: filename, client: c.client}
+}
+
+// NewFolder will make a new folder object. This will not
+// send any data to canvas.
+func NewFolder(foldername string) *Folder { return defaultCanvas.NewFolder(foldername) }
+
+// NewFolder will make a new folder object. This will not
+// send any data to canvas.
+func (c *Canvas) NewFolder(foldername string) *Folder {
+	return &Folder{Foldername: foldername, client: c.client}
+}
 
 // GetFile will get a file by the id.
 func (c *Canvas) GetFile(id int, opts ...Option) (*File, error) {
@@ -607,11 +628,8 @@ func createBookmark(d doer, id interface{}, b *Bookmark) error {
 }
 
 func deleteBookmark(d doer, pathvar interface{}, id int) error {
-	req := newreq("DELETE", fmt.Sprintf("/users/%v/bookmarks/%d", pathvar, id), "")
-	if _, err := do(d, req); err != nil {
-		return err
-	}
-	return nil
+	_, err := delete(d, fmt.Sprintf("/users/%v/bookmarks/%d", pathvar, id), nil)
+	return err
 }
 
 func getAccounts(d doer, path string, opts []Option) (accts []Account, err error) {

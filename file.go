@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/harrybrwn/errs"
 )
 
 // FileObjType is the type of a file
@@ -207,6 +209,58 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 
 func (f *File) strID() string {
 	return fmt.Sprintf("%d", f.ID)
+}
+
+// AsWriteCloser returns an io.WriteCloser that uploads
+// any data that has been written to it. All data
+// written will be sent to the file when the Close function
+// is called. Calling Close will also update the file that
+// is creating the WriteCloser.
+func (f *File) AsWriteCloser() (io.WriteCloser, error) {
+	opts := []Option{}
+	if f.Filename == "" {
+		return nil, errs.New("cannot make a WriteCloser: file has no filename")
+	}
+	parent, err := f.ParentFolder()
+	if err != nil && parent != nil {
+		opts = append(opts, Opt("parent_folder_id", parent.ID))
+	}
+	return &fileWriter{
+		buf:      new(bytes.Buffer),
+		filename: f.Filename,
+		opts:     opts,
+		path:     "/users/self/files",
+		d:        f.client,
+		file:     f,
+	}, nil
+}
+
+type fileWriter struct {
+	file     *File
+	buf      *bytes.Buffer
+	filename string
+	opts     []Option
+	path     string
+	d        doer
+}
+
+func (fw *fileWriter) Write(b []byte) (int, error) {
+	return fw.buf.Write(b)
+}
+
+func (fw *fileWriter) Close() error {
+	file, err := uploadFile(fw.d, fw.filename, fw.buf, fw.path, fw.opts)
+	*fw.file = *file
+	return err
+}
+
+// AsReadCloser will return the contents of the file in an io.ReadCloser.
+func (f *File) AsReadCloser() (io.ReadCloser, error) {
+	resp, err := http.Get(f.URL)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
 }
 
 // JoinFileObjs will join a file channel and a folder channel into a generic
@@ -451,29 +505,6 @@ func foldersChannel(
 	return ch
 }
 
-// https://canvas.instructure.com/doc/api/file.file_uploads.html
-func uploadFile(
-	d doer,
-	filename string,
-	r io.Reader,
-	path string,
-	opts []Option,
-) (*File, error) {
-	q := params{"name": {filename}}
-	q.Add(opts)
-
-	req := newreq("POST", path, q.Encode())
-	resp, err := do(d, req)
-	if err != nil {
-		return nil, err
-	}
-	uploader, err := getUploader(resp.Body) // will close the body
-	if err != nil {
-		return nil, err
-	}
-	return uploader.upload(d, filename, r)
-}
-
 // https://canvas.instructure.com/doc/api/files.html#method.folders.create
 func createFolder(
 	d doer,
@@ -496,6 +527,29 @@ func createFolder(
 	defer resp.Body.Close()
 	f := &Folder{client: d}
 	return f, json.NewDecoder(resp.Body).Decode(f)
+}
+
+// https://canvas.instructure.com/doc/api/file.file_uploads.html
+func uploadFile(
+	d doer,
+	filename string,
+	r io.Reader,
+	path string,
+	opts []Option,
+) (*File, error) {
+	q := params{"name": {filename}}
+	q.Add(opts)
+
+	req := newreq("POST", path, q.Encode())
+	resp, err := do(d, req)
+	if err != nil {
+		return nil, err
+	}
+	uploader, err := getUploader(resp.Body) // will close the body
+	if err != nil {
+		return nil, err
+	}
+	return uploader.upload(d, filename, r)
 }
 
 func getUploader(rc io.ReadCloser) (*fileupload, error) {

@@ -84,21 +84,21 @@ func handleErrs(errs <-chan error, ch closable, handle errorHandlerFunc) {
 func (p *paginated) firstReq() (int, *http.Response, error) {
 	resp, err := get(p.do, p.path, p.getQuery(1))
 	if err != nil {
-		return 0, nil, err
+		return -1, nil, err
 	}
 	n, err := findlastpage(resp.Header)
 	if err != nil {
-		return 0, nil, err
+		return -1, nil, err
 	}
 	return n, resp, nil
 }
 
 func (p *paginated) start() <-chan error {
 	n, resp, err := p.firstReq() // n pages and first request
-	if err != nil {
+	if err != nil && n == -1 {
 		go func() {
 			p.errs <- err
-			close(p.errs)
+			p.Close()
 		}()
 		return p.errs
 	}
@@ -128,9 +128,13 @@ func (p *paginated) start() <-chan error {
 	}
 	go func() {
 		p.wg.Wait()
-		close(p.errs)
+		p.Close()
 	}()
 	return p.errs
+}
+
+func (p *paginated) Close() {
+	close(p.errs)
 }
 
 func (p *paginated) getQuery(page int) params {
@@ -187,7 +191,7 @@ func newLinkedResource(header http.Header) (*linkedResource, error) {
 	return res, nil
 }
 
-type linkedResource struct { //map[string]*link
+type linkedResource struct {
 	Current, First, Last, Next *link
 }
 

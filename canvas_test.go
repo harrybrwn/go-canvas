@@ -173,8 +173,8 @@ func TestCalendarEvents(t *testing.T) {
 	for range calendar {
 		i++
 	}
-	if i != 2 {
-		t.Errorf("should have only 2 calendar events, got %d", i)
+	if i < 1 {
+		t.Errorf("should have at least one calendar event, got %d", i)
 	}
 	_, err = DeleteCalendarEvent(event)
 	if err != nil {

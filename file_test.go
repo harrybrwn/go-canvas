@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -181,6 +182,7 @@ func TestRoot(t *testing.T) {
 }
 
 func TestFilesFolders(t *testing.T) {
+	t.Skip("tests take too long")
 	c := testCourse()
 	folder, err := c.Folder(19926068)
 	if err != nil {
@@ -268,9 +270,42 @@ func TestFileUpload(t *testing.T) {
 	if err = file.Delete(); err != nil {
 		t.Error(err)
 	}
-	_, err = GetFile(file.ID)
-	if err == nil {
-		t.Error("expected an error here")
+}
+
+func TestFile_AsWriteCloser(t *testing.T) {
+	file := NewFile("test-file")
+
+	wc, err := file.AsWriteCloser()
+	if err != nil {
+		t.Error("could not create io.WriteCloser:", err)
+	}
+	if _, err = io.WriteString(wc, "this is a test file for the examples"); err != nil {
+		t.Error("could not write data:", err)
+	}
+	// close sends the data to canvas and updates the 'file' pointer
+	if err = wc.Close(); err != nil {
+		t.Error("could not send data: ", err)
+	}
+	defer file.Delete()
+
+	newfile, err := GetFile(file.ID)
+	if err != nil {
+		t.Error(err)
+	}
+	if newfile.ID != file.ID {
+		t.Error("got wrong file ids:", newfile.ID, file.ID)
+	}
+	rc, err := newfile.AsReadCloser()
+	if err != nil {
+		t.Error("could not create an io.ReadCloser from the file: ", err)
+	}
+	b := new(bytes.Buffer)
+	// _, err = newfile.WriteTo(b)
+	if _, err = b.ReadFrom(rc); err != nil {
+		t.Error("could not read from file:", err)
+	}
+	if b.String() != "this is a test file for the examples" {
+		t.Error("did not get the correct file contents")
 	}
 }
 
