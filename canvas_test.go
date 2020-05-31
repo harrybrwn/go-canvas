@@ -58,8 +58,7 @@ func testCourse() Course {
 	return *testingCourse
 }
 
-func Test(t *testing.T) {
-}
+func Test(t *testing.T) {}
 
 func TestAssignments(t *testing.T) {
 	is := is.New(t)
@@ -232,6 +231,50 @@ func TestUser_Err(t *testing.T) {
 	ConcurrentErrorHandler = defaultErrorHandler
 }
 
+func TestUser(t *testing.T) {
+	is := is.New(t)
+	client, mux, server := testServer()
+	defer server.Close()
+	defer swapCanvas(&Canvas{client: client})()
+	nfiles := 6
+	mux.HandleFunc("/api/v1/users/2", func(w http.ResponseWriter, r *http.Request) {
+		assertMethod(t, r, "GET")
+		w.WriteHeader(200)
+		writeTestFile(t, "user.json", w)
+	})
+	mux.HandleFunc("/api/v1/users/2/files", filesHandlerFunc(t, nfiles))
+	mux.HandleFunc("/api/v1/users/2/folders", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			is.Equal(r.URL.Query().Get("name"), "tests")
+			writeTestFile(t, "folder.json", w)
+		case "GET":
+			fn := foldersHandlerFunc(t, nfiles)
+			fn(w, r)
+		}
+	})
+	user, err := GetUser(2)
+	is.NoErr(err)
+	is.Equal(user.ID, 2)
+	i := 0
+	for f := range user.Files() {
+		i++
+		is.Equal(f.ID, 569)
+	}
+	is.Equal(i, nfiles)
+	files, err := user.ListFiles()
+	is.NoErr(err)
+	is.Equal(len(files), nfiles)
+	folder, err := user.CreateFolder("tests")
+	if err != nil {
+		t.Error(err)
+	}
+	is.True(folder != nil)
+	folders, err := user.ListFolders()
+	is.NoErr(err)
+	is.Equal(len(folders), nfiles)
+}
+
 func TestSearchUser(t *testing.T) {
 	c := testCourse()
 	users, err := c.SearchUsers("test")
@@ -343,16 +386,12 @@ func TestAccount(t *testing.T) {
 
 func TestBookmarks(t *testing.T) {
 	is := is.New(t)
-
 	c := testCourse()
 	err := CreateBookmark(&Bookmark{
 		Name: "test bookmark",
 		URL:  fmt.Sprintf("https://%s/courses/%d/assignments", DefaultHost, c.ID),
 	})
-	if err != nil {
-		t.Error(err)
-	}
-
+	is.NoErr(err)
 	bks, err := Bookmarks()
 	is.NoErr(err)
 	for _, b := range bks {
@@ -369,6 +408,39 @@ func TestBookmarks(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("expected an error")
+	}
+}
+
+func TestCourse_User(t *testing.T) {
+	client, mux, server := testServer()
+	defer server.Close()
+	defer swapCanvas(&Canvas{client: client})()
+	mux.HandleFunc("/api/v1/courses/1234/users/2", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		assertMethod(t, r, "GET")
+		writeTestFile(t, "user.json", w)
+	})
+	course := &Course{client: client, ID: 1234}
+	user, err := course.User(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if user.ID != 2 {
+		t.Error("wrong id")
+	}
+}
+
+func TestCourse_DiscussionTopics(t *testing.T) {
+	c := testCourse()
+	discs, err := c.DiscussionTopics()
+	if err != nil {
+		t.Error(err)
+	}
+	for _, d := range discs {
+		if d.ID == 0 {
+			t.Error("got zero id")
+		}
 	}
 }
 
@@ -425,6 +497,58 @@ func TestErrors(t *testing.T) {
 	is.Equal(err.Error(), "end_date: no")
 	is.True(IsRateLimit(ErrRateLimitExceeded))
 	is.True(!IsRateLimit(nil))
+}
+
+func TestRateLimitErr(t *testing.T) {
+	cli, mux, server := testServer()
+	defer server.Close()
+	defer swapCanvas(&Canvas{client: cli})()
+	mux.HandleFunc("/api/v1/accounts/self", func(w http.ResponseWriter, r *http.Request) {
+		assertMethod(t, r, "GET")
+		w.WriteHeader(http.StatusForbidden)
+	})
+	mux.HandleFunc("/api/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
+		assertMethod(t, r, "GET")
+		w.WriteHeader(http.StatusForbidden)
+	})
+	mux.HandleFunc("/api/v1/folders/123/copy_file", func(w http.ResponseWriter, r *http.Request) {
+		assertMethod(t, r, "POST")
+		q := r.URL.Query()
+		if q.Get("source_file_id") != "54321" {
+			t.Error("wrong source_file_id")
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	})
+	_, err := CurrentAccount()
+	if !IsRateLimit(err) {
+		t.Error("expected rate limit error")
+	}
+	_, err = Accounts()
+	if !IsRateLimit(err) {
+		t.Error("expected rate limit error")
+	}
+	folder := &Folder{ID: 123}
+	file := &File{client: cli, ID: 54321}
+	err = file.Copy(folder)
+	if err == nil {
+		t.Error("expected an error")
+	}
+}
+
+func TestUtils(t *testing.T) {
+	tests := []struct {
+		in, out string
+	}{
+		{"Course", "courses"},
+		{"User", "users"},
+		{"GroupCategory", "group_categories"},
+		{"Account", "accounts"},
+	}
+	for _, test := range tests {
+		if path := pathFromContextType(test.in); path != test.out {
+			t.Errorf("got %s; wanted %s", path, test.out)
+		}
+	}
 }
 
 func TestOptions(t *testing.T) {

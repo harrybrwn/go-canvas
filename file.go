@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -217,19 +216,26 @@ func (f *File) strID() string {
 // is called. Calling Close will also update the file that
 // is creating the WriteCloser.
 func (f *File) AsWriteCloser() (io.WriteCloser, error) {
-	opts := []Option{}
+	var (
+		opts = []Option{}
+		path = "/users/self/files"
+	)
 	if f.Filename == "" {
 		return nil, errs.New("cannot make a WriteCloser: file has no filename")
 	}
 	parent, err := f.ParentFolder()
 	if err != nil && parent != nil {
 		opts = append(opts, Opt("parent_folder_id", parent.ID))
+		if parent.ContextType != "" {
+			ctxPath := pathFromContextType(parent.ContextType)
+			path = fmt.Sprintf("%s/%d/files", ctxPath, parent.ContextID)
+		}
 	}
 	return &fileWriter{
 		buf:      new(bytes.Buffer),
 		filename: f.Filename,
 		opts:     opts,
-		path:     "/users/self/files",
+		path:     path,
 		d:        f.client,
 		file:     f,
 	}, nil
@@ -250,8 +256,11 @@ func (fw *fileWriter) Write(b []byte) (int, error) {
 
 func (fw *fileWriter) Close() error {
 	file, err := uploadFile(fw.d, fw.filename, fw.buf, fw.path, fw.opts)
+	if err != nil {
+		return err
+	}
 	*fw.file = *file
-	return err
+	return nil
 }
 
 // AsReadCloser will return the contents of the file in an io.ReadCloser.
@@ -300,7 +309,9 @@ type Folder struct {
 	FoldersURL string `json:"folders_url"`
 
 	ContextType string `json:"context_type"`
-	ContextID   int    `json:"context_id"`
+	// if ContextType is "Course" ContextID will be the course id, if
+	// its "User" then it will be the user id and so on.
+	ContextID int `json:"context_id"`
 
 	Position     int `json:"position"`
 	FilesCount   int `json:"files_count"`
@@ -573,10 +584,10 @@ func getUploader(rc io.ReadCloser) (*fileupload, error) {
 }
 
 type fileupload struct {
-	FileParam    string       `json:"file_param"`
-	Progress     string       `json:"progress"`
-	UploadURL    string       `json:"upload_url"`
-	UploadParams genericParam `json:"upload_params"`
+	FileParam    string                 `json:"file_param"`
+	Progress     string                 `json:"progress"`
+	UploadURL    string                 `json:"upload_url"`
+	UploadParams map[string]interface{} `json:"upload_params"`
 
 	url    *url.URL
 	body   *bytes.Buffer
@@ -644,8 +655,6 @@ func listFolders(d doer, path string, parent *Folder, opts []Option) ([]*Folder,
 	}
 }
 
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
-
 func folderList(d doer, path string) ([]*Folder, error) {
 	folders := []*Folder{}
 	err := getjson(d, &folders, nil, path)
@@ -659,9 +668,10 @@ func folderList(d doer, path string) ([]*Folder, error) {
 }
 
 var (
-	_ FileObj     = (*File)(nil)
-	_ io.WriterTo = (*File)(nil)
-	_ FileObj     = (*Folder)(nil)
+	_ FileObj        = (*File)(nil)
+	_ io.WriterTo    = (*File)(nil)
+	_ io.WriteCloser = (*fileWriter)(nil)
+	_ FileObj        = (*Folder)(nil)
 )
 
 type fileChan chan *File

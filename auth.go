@@ -12,8 +12,8 @@ import (
 	"github.com/harrybrwn/errs"
 )
 
-// ErrRateLimitExceeded is returned when the api rate limit has been reached.
 var (
+	// ErrRateLimitExceeded is returned when the api rate limit has been reached.
 	ErrRateLimitExceeded = errors.New("403 Forbidden (Rate Limit Exceeded)")
 
 	apiPath = "/api/v1"

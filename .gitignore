@@ -13,3 +13,4 @@ gen/
 
 # Testing
 interfaces.go
+testdata/course.json

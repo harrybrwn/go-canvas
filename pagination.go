@@ -154,7 +154,7 @@ var (
 func findlastpage(header http.Header) (int, error) {
 	links := header.Get("Link")
 	if links == "" {
-		return -1, errs.New("this is not a request for a paginated list")
+		return -1, errs.New("no links found in the request header")
 	}
 	parts := lastpageRegex.FindStringSubmatch(links)
 	if len(parts) < 3 {

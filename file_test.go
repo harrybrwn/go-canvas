@@ -30,6 +30,48 @@ func testCourseRoot() *Folder {
 	return courseRoot
 }
 
+func TestFolders(t *testing.T) {
+	is := is.New(t)
+	folder := NewFolder("test")
+	if folder.Foldername != "test" {
+		t.Error("wrong foldername")
+	}
+	if folder.client == nil {
+		t.Error("needs client")
+	}
+	ConcurrentErrorHandler = func(e error) error {
+		fmt.Println("Error in Testing:", e)
+		return e
+	}
+	cli, mux, server := testServer()
+	defer server.Close()
+	defer swapCanvas(&Canvas{client: cli})()
+	mux.HandleFunc(fmt.Sprintf("%s/users/self/folders", apiPath), foldersHandlerFunc(t, 3))
+	nfiles := 5
+	mux.HandleFunc(fmt.Sprintf("%s/users/self/files", apiPath), filesHandlerFunc(t, nfiles))
+
+	i := 0
+	for f := range Folders() {
+		i++
+		if f.ID != 2937 {
+			t.Error("did not get 2937 as folder id")
+		}
+	}
+	is.Equal(i, 3) // should have 3 folders
+	i = 0
+	for f := range Files() {
+		i++
+		is.Equal(f.ID, 569) // should have testing id
+	}
+	is.Equal(i, nfiles)
+	files, err := ListFiles()
+	is.NoErr(err)
+	is.Equal(len(files), nfiles)
+	folders, err := ListFolders()
+	is.NoErr(err)
+	is.Equal(len(folders), 3)
+}
+
 func TestCourse_Files(t *testing.T) {
 	is := is.New(t)
 	c := testCourse()
@@ -101,7 +143,7 @@ func TestFiles_Err(t *testing.T) {
 		t.Error("nil channel")
 	}
 	for range files {
-		t.Error("should not execure")
+		t.Error("should not execute")
 	}
 }
 
@@ -204,7 +246,6 @@ func TestRoot(t *testing.T) {
 }
 
 func TestFilesFolders(t *testing.T) {
-	t.Skip("tests take too long")
 	c := testCourse()
 	folder, err := c.Folder(19926068)
 	if err != nil {
@@ -306,7 +347,7 @@ func TestFile_AsWriteCloser(t *testing.T) {
 	}
 	// close sends the data to canvas and updates the 'file' pointer
 	if err = wc.Close(); err != nil {
-		t.Error("could not send data: ", err)
+		t.Error("could not send data:", err)
 	}
 	defer file.Delete()
 
@@ -319,12 +360,18 @@ func TestFile_AsWriteCloser(t *testing.T) {
 	}
 	rc, err := newfile.AsReadCloser()
 	if err != nil {
-		t.Error("could not create an io.ReadCloser from the file: ", err)
+		t.Error("could not create an io.ReadCloser from the file:", err)
 	}
 	b := new(bytes.Buffer)
-	// _, err = newfile.WriteTo(b)
 	if _, err = b.ReadFrom(rc); err != nil {
 		t.Error("could not read from file:", err)
+	}
+	if b.String() != "this is a test file for the examples" {
+		t.Error("did not get the correct file contents")
+	}
+	b.Reset()
+	if _, err = newfile.WriteTo(b); err != nil {
+		t.Error(err)
 	}
 	if b.String() != "this is a test file for the examples" {
 		t.Error("did not get the correct file contents")
@@ -459,4 +506,36 @@ func TestPaginationErrors(t *testing.T) {
 			t.Error("should not have the same count")
 		}
 	})
+}
+
+func foldersHandlerFunc(t *testing.T, n int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Link", `<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="last"`)
+		w.WriteHeader(200)
+
+		w.Write([]byte("["))
+		for i := 0; i < n; i++ {
+			writeTestFile(t, "folder.json", w)
+			if i < n-1 {
+				w.Write([]byte(","))
+			}
+		}
+		w.Write([]byte("]"))
+	}
+}
+
+func filesHandlerFunc(t *testing.T, n int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Link", `<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="last"`)
+		w.WriteHeader(200)
+
+		w.Write([]byte("["))
+		for i := 0; i < n; i++ {
+			writeTestFile(t, "file.json", w)
+			if i < n-1 {
+				w.Write([]byte(","))
+			}
+		}
+		w.Write([]byte("]"))
+	}
 }

@@ -209,7 +209,6 @@ func Root(opts ...Option) (*Folder, error) {
 // CreateFolder will create a new folder.
 func (c *Canvas) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)
-	fmt.Println("split:", dir, name)
 	return createFolder(c.client, dir, name, opts, "/users/self/folders")
 }
 
