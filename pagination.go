@@ -12,6 +12,10 @@ import (
 	"github.com/harrybrwn/errs"
 )
 
+const (
+	defaultPerPage = 10
+)
+
 type sendFunc func(io.Reader) error
 
 func newPaginatedList(
@@ -28,7 +32,7 @@ func newPaginatedList(
 		path:    path,
 		opts:    parameters,
 		send:    send,
-		perpage: 10,
+		perpage: defaultPerPage,
 		wg:      new(sync.WaitGroup),
 		errs:    make(chan error),
 	}
@@ -80,9 +84,27 @@ func handleErrs(errs <-chan error, ch closable, handle errorHandlerFunc) {
 	}
 }
 
+type pageReader interface {
+	io.Reader
+	Page() int
+}
+
+type pagereader struct {
+	num  int
+	body io.Reader
+}
+
+func (p *pagereader) Page() int {
+	return p.num
+}
+
+func (p *pagereader) Read(b []byte) (int, error) {
+	return p.body.Read(b)
+}
+
 // returns <number of pages>, <first response>
 func (p *paginated) firstReq() (int, *http.Response, error) {
-	resp, err := get(p.do, p.path, p.getQuery(1))
+	resp, err := get(p.do, p.path, p.getPageQuery(1))
 	if err != nil {
 		return -1, nil, err
 	}
@@ -95,7 +117,7 @@ func (p *paginated) firstReq() (int, *http.Response, error) {
 
 func (p *paginated) start() <-chan error {
 	n, resp, err := p.firstReq() // n pages and first request
-	if err != nil && n == -1 {
+	if err != nil || n == -1 {
 		go func() {
 			p.errs <- err
 			p.Close()
@@ -105,22 +127,23 @@ func (p *paginated) start() <-chan error {
 	p.wg.Add(n)
 
 	go func() {
-		if err = p.send(resp.Body); err != nil {
+		if err = p.send(&pagereader{0, resp.Body}); err != nil {
 			p.errs <- err
 		}
 		resp.Body.Close()
 		p.wg.Done()
 	}()
-	// already made a request for page 1, so start on 2
+	// Already made a request for page 1, so start on 2
 	for page := 2; page <= n; page++ {
 		go func(page int) {
 			defer p.wg.Done()
-			resp, err := get(p.do, p.path, p.getQuery(page))
+			resp, err := get(p.do, p.path, p.getPageQuery(page))
 			if err != nil {
 				p.errs <- err
 				return // stop bc we won't have data to send
 			}
-			if err = p.send(resp.Body); err != nil {
+			// Using page - 1 because my interface will index from 0 not 1
+			if err = p.send(&pagereader{page - 1, resp.Body}); err != nil {
 				p.errs <- err
 			}
 			resp.Body.Close()
@@ -137,7 +160,7 @@ func (p *paginated) Close() {
 	close(p.errs)
 }
 
-func (p *paginated) getQuery(page int) params {
+func (p *paginated) getPageQuery(page int) params {
 	q := params{
 		"page":     {strconv.FormatInt(int64(page), 10)}, // base 10
 		"per_page": {fmt.Sprintf("%d", p.perpage)},

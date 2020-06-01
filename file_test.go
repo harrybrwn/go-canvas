@@ -2,17 +2,14 @@ package canvas
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
-	"sync"
 	"testing"
 
-	"github.com/harrybrwn/errs"
 	"github.com/matryer/is"
 )
 
@@ -46,9 +43,11 @@ func TestFolders(t *testing.T) {
 	cli, mux, server := testServer()
 	defer server.Close()
 	defer swapCanvas(&Canvas{client: cli})()
-	mux.HandleFunc(fmt.Sprintf("%s/users/self/folders", apiPath), foldersHandlerFunc(t, 3))
+	// mux.HandleFunc(fmt.Sprintf("%s/users/self/folders", apiPath), foldersHandlerFunc(t, 3))
+	mux.HandleFunc(fmt.Sprintf("%s/users/self/folders", apiPath), handlePagingatedList(t, 3, "folder.json"))
 	nfiles := 5
-	mux.HandleFunc(fmt.Sprintf("%s/users/self/files", apiPath), filesHandlerFunc(t, nfiles))
+	// mux.HandleFunc(fmt.Sprintf("%s/users/self/files", apiPath), filesHandlerFunc(t, nfiles))
+	mux.HandleFunc(fmt.Sprintf("%s/users/self/files", apiPath), handlePagingatedList(t, nfiles, "file.json"))
 
 	i := 0
 	for f := range Folders() {
@@ -378,141 +377,34 @@ func TestFile_AsWriteCloser(t *testing.T) {
 	}
 }
 
-func newSyncAuth(a *auth, mu *sync.Mutex) *syncAuth {
-	return &syncAuth{
-		tok: a.token,
-		rt:  http.DefaultTransport,
-		mu:  mu,
-	}
-}
-
-type syncAuth struct {
-	tok string
-	rt  http.RoundTripper
-	mu  *sync.Mutex
-}
-
-func (sa *syncAuth) RoundTrip(r *http.Request) (*http.Response, error) {
-	sa.mu.Lock()
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", sa.tok))
-	r.Header.Set("User-Agent", "tests: "+DefaultUserAgent)
-	r.Host = DefaultHost
-	r.URL.Host = DefaultHost
-	r.URL.Scheme = "https"
-	resp, err := sa.rt.RoundTrip(r)
-	sa.mu.Unlock()
-	return resp, err
-}
-
-func TestPaginationErrors(t *testing.T) {
+func TestFolder_Copy(t *testing.T) {
 	c := testCourse()
-	tr := c.client.(*http.Client).Transport
-	var mu sync.Mutex
-	// we need a syncAuth for this test because some goroutines will be
-	// modifying the client object
-	if a, ok := tr.(*auth); ok {
-		c.client.(*http.Client).Transport = newSyncAuth(a, &mu)
-	}
-	allfiles, err := c.ListFiles()
+	paths, err := c.FolderPath("/apizza/pkg/cache")
 	if err != nil {
-		t.Fatal(err)
+		t.Error("FolderPath failed:", err)
 	}
-	var testerror = errs.New("test error")
-
-	t.Run("send_error", func(t *testing.T) {
-		readCount := 0
-		ch := make(fileChan)
-		send := func(r io.Reader) error {
-			mu.Lock()
-			readCount++
-			if readCount == 4 {
-				mu.Unlock()
-				return testerror // send an error only after the first request
-			}
-			mu.Unlock()
-			files := make([]*File, 0)
-			err := json.NewDecoder(r).Decode(&files)
-			for _, f := range files {
-				ch <- f
-			}
-			return err
-		}
-		p := newPaginatedList(
-			c.client, fmt.Sprintf("courses/%d/files/", c.ID),
-			send, nil,
-		)
-		p.perpage = 4
-		go handleErrs(p.start(), ch, func(e error) error {
-			if e != testerror {
-				t.Error("should only be handling the error I sent")
-			}
-			return nil
-		})
-		fileCount := 0
-		for range ch {
-			fileCount++
-		}
-		if readCount != 5 {
-			t.Error("should have gone through all the pages")
-		}
-		if fileCount >= len(allfiles) {
-			t.Error("should not have gotten all of the files")
-		}
-	})
-	t.Run("auth_error", func(t *testing.T) {
-		var tok string
-		readCount := 0
-		ch := make(fileChan)
-		send := func(r io.Reader) error {
-			mu.Lock()
-			readCount++
-			if readCount == 2 {
-				tok = c.client.(*http.Client).Transport.(*syncAuth).tok
-				c.client.(*http.Client).Transport.(*syncAuth).tok = ""
-			}
-			mu.Unlock()
-			files := make([]*File, 0)
-			err := json.NewDecoder(r).Decode(&files)
-			for _, f := range files {
-				ch <- f
-			}
-			return err
-		}
-		p := newPaginatedList(
-			c.client,
-			fmt.Sprintf("courses/%d/files/", c.ID),
-			send, nil,
-		)
-		p.perpage = 4
-		go handleErrs(p.start(), ch, func(e error) error {
-			if e == nil {
-				t.Error("expected error")
-			}
-			err, ok := e.(*AuthError)
-			if !ok {
-				t.Errorf("expected an auth error; got %T", err)
-			}
-			return nil
-		})
-		count := 0
-		for f := range ch {
-			if f.ID == 0 {
-				t.Error("got bad file id")
-			}
-			count++
-		}
-		c.client.(*http.Client).Transport.(*syncAuth).tok = tok
-		if count >= len(allfiles) {
-			t.Error("should not have the same count")
-		}
-	})
+	l := len(paths)
+	folder := paths[l-1]
+	dest := paths[1]
+	if err = folder.Copy(dest); err != nil {
+		t.Error(err)
+	}
+	paths, err = c.FolderPath("/apizza/cache")
+	if err != nil {
+		t.Error(err)
+	}
+	if len(paths) < 3 {
+		t.Fatal("did not copy folder")
+	}
+	if err = paths[len(paths)-1].Delete(); err != nil {
+		t.Error(err)
+	}
 }
 
 func foldersHandlerFunc(t *testing.T, n int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Link", `<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="last"`)
 		w.WriteHeader(200)
-
 		w.Write([]byte("["))
 		for i := 0; i < n; i++ {
 			writeTestFile(t, "folder.json", w)
@@ -528,10 +420,24 @@ func filesHandlerFunc(t *testing.T, n int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Link", `<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="last"`)
 		w.WriteHeader(200)
-
 		w.Write([]byte("["))
 		for i := 0; i < n; i++ {
 			writeTestFile(t, "file.json", w)
+			if i < n-1 {
+				w.Write([]byte(","))
+			}
+		}
+		w.Write([]byte("]"))
+	}
+}
+
+func handlePagingatedList(t *testing.T, n int, file string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Link", `<https://canvas.instructure.com/api/v1/path/?&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/path?page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/path?page=1&per_page=10>; rel="last"`)
+		w.WriteHeader(200)
+		w.Write([]byte("["))
+		for i := 0; i < n; i++ {
+			writeTestFile(t, file, w)
 			if i < n-1 {
 				w.Write([]byte(","))
 			}

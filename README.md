@@ -13,7 +13,18 @@ go get github.com/harrybrwn/go-canvas
 ```
 
 ## Getting Started
-Get a token from your canvas account, [this](https://community.canvaslms.com/docs/DOC-16005-42121018197) should help. Then either set a `$CANVAS_TOKEN` environment variable or using the `canvas.SetToken` or `canvas.New` functions.
+1. Get a token from your canvas account, [this](https://community.canvaslms.com/docs/DOC-16005-42121018197) should help.
+2. Give the token to the library
+    * Set `$CANVAS_TOKEN` environment variable
+    * Call `canvas.SetToken` or `canvas.New`
 
 ### Warning
-Everything that is related to the `canvas.Account` struct is untested because I can't figure out how to get access to one for testing.
+Everything that is related to the `canvas.Account` struct is not as extensivly tested because I can't figure out how to get access to one for testing.
+
+# TODO
+* Groups
+* Outcome Groups
+* Favorites
+* Submissions
+    * assignments
+    * file uploads

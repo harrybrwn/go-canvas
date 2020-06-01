@@ -73,7 +73,6 @@ func TestAssignments(t *testing.T) {
 	if i != 1 {
 		t.Error("should have one assignment")
 	}
-
 	now := time.Now().UTC()
 	newass, err := c.CreateAssignment(Assignment{
 		Name:        "runtime test assignment",
@@ -92,7 +91,6 @@ func TestAssignments(t *testing.T) {
 	if !(newass.DueAt.Equal(now) || newass.DueAt.Add(time.Second).Equal(now)) {
 		t.Errorf("due date should not have changed after response; got %v, want %v", newass.DueAt, now)
 	}
-
 	asses, err := c.ListAssignments(IncludeOpt("overrides"))
 	is.NoErr(err)
 	if len(asses) != 2 {
@@ -112,7 +110,6 @@ func TestSetHost(t *testing.T) {
 		t.Fatalf("could not set a host for this transport: %T", trans)
 	}
 	host := auth.host
-
 	if err := SetHost("test.host"); err != nil {
 		t.Error(err)
 	}
@@ -185,6 +182,32 @@ func TestCalendarEvents(t *testing.T) {
 	}
 }
 
+func TestUpdateCalendarEvent(t *testing.T) {
+	cli, mux, server := testServer()
+	defer server.Close()
+	defer swapCanvas(&Canvas{client: cli})()
+	mux.HandleFunc("/api/v1/calendar_events/123", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			q := r.URL.Query()
+			if q.Get("calendar_event[all_day]") != "true" {
+				t.Error("should have all_day in query")
+			}
+			if q.Get("calendar_event[title]") != "title" {
+				t.Error("found wrong title")
+			}
+		}
+		writeTestFile(t, "calendar_event.json", w)
+	})
+	event := &CalendarEvent{ID: 123, Title: "title", AllDay: true}
+	if err := UpdateCalendarEvent(event); err != nil {
+		t.Error("error while updating calendar event:", err)
+	}
+	if event.ID != 234 {
+		t.Error("wrong id")
+	}
+	DeleteCalendarEventByID(event.ID)
+}
+
 func TestUser_Err(t *testing.T) {
 	is := is.New(t)
 	u, err := testUser()
@@ -192,16 +215,13 @@ func TestUser_Err(t *testing.T) {
 	colors, err := u.Colors()
 	is.NoErr(err)
 	defer deauthorize(u.client)()
-
 	settings, err := u.Settings()
 	is.True(err != nil) // User.Settings should return an error when not authorized
 	is.True(settings == nil)
 	is.True(len(settings) == 0)
-
 	profile, err := u.Profile()
 	is.True(err != nil)
 	is.True(profile == nil)
-
 	var col string
 	for col = range colors {
 		break
@@ -209,7 +229,6 @@ func TestUser_Err(t *testing.T) {
 	color, err := u.Color(col)
 	is.True(err != nil)
 	is.True(color == nil)
-
 	err = u.SetColor(col, "#FFFFFF")
 	is.True(err != nil)
 	ConcurrentErrorHandler = func(e error) error {
@@ -332,7 +351,6 @@ func TestCourseFileObjects(t *testing.T) {
 	if folder.Foldername != t.Name() {
 		t.Errorf("could not rename the new file to %s", t.Name())
 	}
-
 	for f := range JoinFileObjs(c.Files(), c.Folders()) {
 		if f.GetID() == 0 {
 			t.Error("got a zero id")
@@ -371,12 +389,10 @@ func TestAccount(t *testing.T) {
 	is.NoErr(err)
 
 	t.Skip("can't figure out how to get account authorization")
-	a, err := CurrentAccount()
+	_, err = CurrentAccount()
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Println(a)
-
 	as, err := Accounts()
 	if err != nil {
 		t.Error(err)
@@ -400,7 +416,6 @@ func TestBookmarks(t *testing.T) {
 		}
 		is.NoErr(DeleteBookmark(&b))
 	}
-
 	defer deauthorize(defaultCanvas.client)()
 	err = CreateBookmark(&Bookmark{
 		Name: "test bookmark",
@@ -425,7 +440,6 @@ func TestCourse_User(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if user.ID != 2 {
 		t.Error("wrong id")
 	}
@@ -465,7 +479,6 @@ func TestLinks(t *testing.T) {
 			t.Error("wrong page number")
 		}
 	}
-
 	n, err := findlastpage(http.Header{})
 	if err == nil {
 		t.Error("expected an error")
@@ -488,7 +501,6 @@ func TestErrors(t *testing.T) {
 	}
 	is.Equal(e.Error(), "one, two")
 	is.Equal(checkErrors([]errorMsg{}), "")
-
 	err := &Error{}
 	json.Unmarshal([]byte(`{"errors":{"end_date":"no"},"message":"error"}`), err)
 	is.Equal(err.Error(), "error")
@@ -497,6 +509,8 @@ func TestErrors(t *testing.T) {
 	is.Equal(err.Error(), "end_date: no")
 	is.True(IsRateLimit(ErrRateLimitExceeded))
 	is.True(!IsRateLimit(nil))
+	err = &Error{SentryID: "testid", Err: "this is an error"}
+	is.Equal(err.Error(), "error status: this is an error; sentryId: testid")
 }
 
 func TestRateLimitErr(t *testing.T) {
@@ -557,7 +571,6 @@ func TestOptions(t *testing.T) {
 	o2 := IncludeOpt("one", "two")
 	is.Equal(o.Name(), o2.Name())
 	is.Equal(o.Value(), o2.Value())
-
 	opts := []Option{
 		Opt("key", "value"),
 		DateOpt("date", time.Now()),
@@ -592,6 +605,16 @@ func TestOptions(t *testing.T) {
 	o = UserOpt("key", "value")
 	is.Equal(o.Name(), "user[key]")
 	is.Equal(o.Value(), []string{"value"})
+}
+
+func TestTodos(t *testing.T) {
+	todos, err := Todos()
+	if err != nil {
+		t.Error(err)
+	}
+	for _, t := range todos {
+		fmt.Println(t)
+	}
 }
 
 func deauthorize(d doer) (reset func()) {

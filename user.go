@@ -85,7 +85,8 @@ func (u *User) ListFolders(opts ...Option) ([]*Folder, error) {
 	return listFolders(u.client, u.id("/users/%d/folders"), nil, opts)
 }
 
-// FolderPath will split the path and return a list containing all of the folders in the path.
+// FolderPath will split the path and return a list containing
+// all of the folders in the path.
 func (u *User) FolderPath(pth string) ([]*Folder, error) {
 	pth = path.Join(u.id("/users/%d/folders/by_path"), pth)
 	return folderList(u.client, pth)
@@ -104,7 +105,11 @@ func (u *User) UploadFile(
 // CreateFolder will create a new folder.
 func (u *User) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)
-	return createFolder(u.client, dir, name, opts, "/users/%d/folders", u.ID)
+	return createFolder(
+		u.client, dir,
+		name, opts,
+		"/users/%d/folders", u.ID,
+	)
 }
 
 // CalendarEvents gets the user's calendar events.

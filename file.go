@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -61,19 +62,20 @@ type File struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	ModifiedAt  time.Time `json:"modified_at"`
 
-	Locked   bool      `json:"locked"`
-	UnlockAt time.Time `json:"unlock_at"`
-	Hidden   bool      `json:"hidden"`
-	LockAt   time.Time `json:"lock_at"`
-
-	HiddenForUser   bool        `json:"hidden_for_user"`
-	ThumbnailURL    string      `json:"thumbnail_url"`
-	PreviewURL      string      `json:"preview_url"`
-	MimeClass       string      `json:"mime_class"`
-	MediaEntryID    string      `json:"media_entry_id"`
+	Locked          bool        `json:"locked"`
+	LockAt          time.Time   `json:"lock_at"`
+	UnlockAt        time.Time   `json:"unlock_at"`
 	LockedForUser   bool        `json:"locked_for_user"`
 	LockInfo        interface{} `json:"lock_info"`
 	LockExplanation string      `json:"lock_explanation"`
+
+	Hidden        bool   `json:"hidden"`
+	HiddenForUser bool   `json:"hidden_for_user"`
+	ThumbnailURL  string `json:"thumbnail_url"`
+	PreviewURL    string `json:"preview_url"`
+	MimeClass     string `json:"mime_class"`
+	MediaEntryID  string `json:"media_entry_id"`
+	UploadStatus  string `json:"upload_status"`
 
 	client doer
 	folder *Folder
@@ -207,7 +209,7 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 }
 
 func (f *File) strID() string {
-	return fmt.Sprintf("%d", f.ID)
+	return strconv.FormatInt(int64(f.ID), 10)
 }
 
 // AsWriteCloser returns an io.WriteCloser that uploads
@@ -215,9 +217,11 @@ func (f *File) strID() string {
 // written will be sent to the file when the Close function
 // is called. Calling Close will also update the file that
 // is creating the WriteCloser.
+//
+// This function may make an http request to find the parent folder.
 func (f *File) AsWriteCloser() (io.WriteCloser, error) {
 	var (
-		opts = []Option{}
+		opts = make([]Option, 0, 1)
 		path = "/users/self/files"
 	)
 	if f.Filename == "" {
@@ -259,11 +263,15 @@ func (fw *fileWriter) Close() error {
 	if err != nil {
 		return err
 	}
-	*fw.file = *file
+	if fw.file != nil {
+		*fw.file = *file
+	}
 	return nil
 }
 
 // AsReadCloser will return the contents of the file in an io.ReadCloser.
+//
+// This function will make an http request to get the data
 func (f *File) AsReadCloser() (io.ReadCloser, error) {
 	resp, err := http.Get(f.URL)
 	if err != nil {
@@ -299,6 +307,7 @@ func JoinFileObjs(files <-chan *File, folders <-chan *Folder) <-chan FileObj {
 }
 
 // Folder is a folder
+// https://canvas.instructure.com/doc/api/files.html
 type Folder struct {
 	ID             int    `json:"id"`
 	ParentFolderID int    `json:"parent_folder_id"`
@@ -422,7 +431,7 @@ func (f *Folder) Copy(dest *Folder) error {
 	resp, err := post(
 		f.client,
 		fmt.Sprintf("/folders/%d/copy_folder", dest.ID),
-		params{"source_folder_id": {fmt.Sprintf("%d", f.ID)}},
+		params{"source_folder_id": {strconv.FormatInt(int64(f.ID), 10)}},
 	)
 	if err != nil {
 		return err

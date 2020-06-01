@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -112,12 +113,27 @@ func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
 func CurrentUser(opts ...Option) (*User, error) { return defaultCanvas.CurrentUser(opts...) }
 
 // Todos will get the current user's todo's.
-func (c *Canvas) Todos() error {
-	panic("not implimented") // TODO: finish this
+func (c *Canvas) Todos() ([]TODO, error) {
+	todos := make([]TODO, 0)
+	return todos, getjson(c.client, &todos, url.Values{"per_page": {"100"}}, "/users/self/todo")
 }
 
 // Todos will get the current user's todo's.
-func Todos() error { return defaultCanvas.Todos() }
+func Todos() ([]TODO, error) { return defaultCanvas.Todos() }
+
+// TODO is a to-do struct
+type TODO struct {
+	Type              string      `json:"type"`
+	Assignement       *Assignment `json:"assignment"`
+	Ignore            string      `json:"ignore"`
+	IgnorePerminantly string      `json:"ignore_perminantly"`
+	HTMLURL           string      `json:"html_url"`
+	NeedsGradingCount int         `json:"needs_grading_count"`
+	ContextType       string      `json:"context_type"`
+	ContextID         int         `json:"context_id"`
+	CourseID          int         `json:"course_id"`
+	GroupID           interface{} `json:"group_id"`
+}
 
 // NewFile will make a new file object. This will not
 // send any data to canvas.

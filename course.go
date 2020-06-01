@@ -13,37 +13,31 @@ import (
 )
 
 // Course represents a canvas course.
+// https://canvas.instructure.com/doc/api/courses.html
 type Course struct {
-	ID                   int       `json:"id"`
-	Name                 string    `json:"name"`
-	SisCourseID          int       `json:"sis_course_id"`
-	UUID                 string    `json:"uuid"`
-	IntegrationID        string    `json:"integration_id"`
-	SisImportID          int       `json:"sis_import_id"`
-	CourseCode           string    `json:"course_code"`
-	WorkflowState        string    `json:"workflow_state"`
-	AccountID            int       `json:"account_id"`
-	RootAccountID        int       `json:"root_account_id"`
-	EnrollmentTermID     int       `json:"enrollment_term_id"`
-	GradingStandardID    int       `json:"grading_standard_id"`
-	GradePassbackSetting string    `json:"grade_passback_setting"`
-	CreatedAt            time.Time `json:"created_at"`
-	StartAt              time.Time `json:"start_at"`
-	EndAt                time.Time `json:"end_at"`
-	Locale               string    `json:"locale"`
-	Enrollments          []struct {
-		EnrollmentState                string `json:"enrollment_state"`
-		Role                           string `json:"role"`
-		RoleID                         int64  `json:"role_id"`
-		Type                           string `json:"type"`
-		UserID                         int64  `json:"user_id"`
-		LimitPrivilegesToCourseSection bool   `json:"limit_privileges_to_course_section"`
-	} `json:"enrollments"`
-	TotalStudents     int         `json:"total_students"`
-	Calendar          interface{} `json:"calendar"`
-	DefaultView       string      `json:"default_view"`
-	SyllabusBody      string      `json:"syllabus_body"`
-	NeedsGradingCount int         `json:"needs_grading_count"`
+	ID                   int           `json:"id"`
+	Name                 string        `json:"name"`
+	SisCourseID          int           `json:"sis_course_id"`
+	UUID                 string        `json:"uuid"`
+	IntegrationID        string        `json:"integration_id"`
+	SisImportID          int           `json:"sis_import_id"`
+	CourseCode           string        `json:"course_code"`
+	WorkflowState        string        `json:"workflow_state"`
+	AccountID            int           `json:"account_id"`
+	RootAccountID        int           `json:"root_account_id"`
+	EnrollmentTermID     int           `json:"enrollment_term_id"`
+	GradingStandardID    int           `json:"grading_standard_id"`
+	GradePassbackSetting string        `json:"grade_passback_setting"`
+	CreatedAt            time.Time     `json:"created_at"`
+	StartAt              time.Time     `json:"start_at"`
+	EndAt                time.Time     `json:"end_at"`
+	Locale               string        `json:"locale"`
+	Enrollments          []*Enrollment `json:"enrollments"`
+	TotalStudents        int           `json:"total_students"`
+	Calendar             interface{}   `json:"calendar"`
+	DefaultView          string        `json:"default_view"`
+	SyllabusBody         string        `json:"syllabus_body"`
+	NeedsGradingCount    int           `json:"needs_grading_count"`
 
 	Term           Term           `json:"term"`
 	CourseProgress CourseProgress `json:"course_progress"`
@@ -90,6 +84,11 @@ type Course struct {
 
 	client       doer
 	errorHandler errorHandlerFunc
+}
+
+// ContextCode will return the context code for this specific course.
+func (c *Course) ContextCode() string {
+	return fmt.Sprintf("course_%d", c.ID)
 }
 
 // Settings gets the course settings
@@ -506,6 +505,7 @@ type CourseProgress struct {
 }
 
 // Enrollment is an enrollment object
+// https://canvas.instructure.com/doc/api/enrollments.html
 type Enrollment struct {
 	ID                   int    `json:"id"`
 	CourseID             int    `json:"course_id"`
@@ -513,19 +513,21 @@ type Enrollment struct {
 	CourseSectionID      int    `json:"course_section_id"`
 	SectionIntegrationID string `json:"section_integration_id"`
 
-	SisCourseID                    string      `json:"sis_course_id"`
-	SisAccountID                   string      `json:"sis_account_id"`
-	SisSectionID                   string      `json:"sis_section_id"`
-	SisUserID                      string      `json:"sis_user_id"`
-	EnrollmentState                string      `json:"enrollment_state"`
-	LimitPrivilegesToCourseSection bool        `json:"limit_privileges_to_course_section"`
-	SisImportID                    int         `json:"sis_import_id"`
-	RootAccountID                  int         `json:"root_account_id"`
-	Type                           string      `json:"type"`
-	UserID                         int         `json:"user_id"`
-	AssociatedUserID               interface{} `json:"associated_user_id"`
-	Role                           string      `json:"role"`
-	RoleID                         int         `json:"role_id"`
+	EnrollmentState                string `json:"enrollment_state"`
+	Role                           string `json:"role"`
+	RoleID                         int    `json:"role_id"`
+	Type                           string `json:"type"`
+	LimitPrivilegesToCourseSection bool   `json:"limit_privileges_to_course_section"`
+	UserID                         int    `json:"user_id"`
+	User                           *User  `json:"user"`
+
+	SisCourseID      string      `json:"sis_course_id"`
+	SisAccountID     string      `json:"sis_account_id"`
+	SisSectionID     string      `json:"sis_section_id"`
+	SisUserID        string      `json:"sis_user_id"`
+	SisImportID      int         `json:"sis_import_id"`
+	RootAccountID    int         `json:"root_account_id"`
+	AssociatedUserID interface{} `json:"associated_user_id"`
 
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
@@ -547,7 +549,6 @@ type Enrollment struct {
 		UnpostedCurrentScore string  `json:"unposted_current_score"`
 		UnpostedFinalScore   string  `json:"unposted_final_score"`
 	} `json:"grades"`
-	User                              *User   `json:"user"`
 	OverrideGrade                     string  `json:"override_grade"`
 	OverrideScore                     float64 `json:"override_score"`
 	UnpostedCurrentGrade              string  `json:"unposted_current_grade"`
@@ -690,7 +691,7 @@ func (c *Course) collectUsers(path string, opts []Option) (users []*User, err er
 
 func sendFilesFunc(d doer, ch chan *File, folder *Folder) func(io.Reader) error {
 	return func(r io.Reader) error {
-		files := make([]*File, 0)
+		files := make([]*File, 0, defaultPerPage)
 		err := json.NewDecoder(r).Decode(&files)
 		if err != nil {
 			return err
@@ -706,7 +707,7 @@ func sendFilesFunc(d doer, ch chan *File, folder *Folder) func(io.Reader) error 
 
 func sendFoldersFunc(d doer, ch chan *Folder, parent *Folder) sendFunc {
 	return func(r io.Reader) error {
-		folders := make([]*Folder, 0)
+		folders := make([]*Folder, 0, defaultPerPage)
 		err := json.NewDecoder(r).Decode(&folders)
 		if err != nil {
 			return err
@@ -722,7 +723,7 @@ func sendFoldersFunc(d doer, ch chan *Folder, parent *Folder) sendFunc {
 
 func sendUserFunc(d doer, ch chan *User) sendFunc {
 	return func(r io.Reader) error {
-		list := make([]*User, 0)
+		list := make([]*User, 0, defaultPerPage)
 		err := json.NewDecoder(r).Decode(&list)
 		if err != nil {
 			return err

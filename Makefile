@@ -1,2 +1,3 @@
+
 test:
-	go test -v -cover -race
+	go test -v -cover -race $(TEST)
