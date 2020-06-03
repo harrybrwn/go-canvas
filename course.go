@@ -105,7 +105,6 @@ func (c *Course) UpdateSettings(settings *CourseSettings) (*CourseSettings, erro
 	if err = errs.Pair(err, json.Unmarshal(raw, &m)); err != nil {
 		return nil, err
 	}
-
 	vals := make(params)
 	for k, v := range m {
 		vals[k] = []string{fmt.Sprintf("%v", v)}

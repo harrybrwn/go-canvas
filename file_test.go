@@ -43,10 +43,8 @@ func TestFolders(t *testing.T) {
 	cli, mux, server := testServer()
 	defer server.Close()
 	defer swapCanvas(&Canvas{client: cli})()
-	// mux.HandleFunc(fmt.Sprintf("%s/users/self/folders", apiPath), foldersHandlerFunc(t, 3))
 	mux.HandleFunc(fmt.Sprintf("%s/users/self/folders", apiPath), handlePagingatedList(t, 3, "folder.json"))
 	nfiles := 5
-	// mux.HandleFunc(fmt.Sprintf("%s/users/self/files", apiPath), filesHandlerFunc(t, nfiles))
 	mux.HandleFunc(fmt.Sprintf("%s/users/self/files", apiPath), handlePagingatedList(t, nfiles, "file.json"))
 
 	i := 0
@@ -74,7 +72,6 @@ func TestFolders(t *testing.T) {
 func TestCourse_Files(t *testing.T) {
 	is := is.New(t)
 	c := testCourse()
-
 	c.SetErrorHandler(func(e error) error {
 		t.Fatal(e)
 		return e
@@ -345,8 +342,11 @@ func TestFile_AsWriteCloser(t *testing.T) {
 		t.Error("could not write data:", err)
 	}
 	// close sends the data to canvas and updates the 'file' pointer
+	if wc.(*fileWriter).d == nil {
+		t.Error("write closer should have a doer")
+	}
 	if err = wc.Close(); err != nil {
-		t.Error("could not send data:", err)
+		t.Fatal("could not send data:", err)
 	}
 	defer file.Delete()
 

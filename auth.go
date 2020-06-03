@@ -33,6 +33,14 @@ type client struct {
 	host string
 }
 
+func (c *client) Do(r *http.Request) (*http.Response, error) {
+	if r.URL.Host == "" {
+		r.Host = c.host
+		r.URL.Host = c.host
+	}
+	return c.Client.Do(r)
+}
+
 type doer interface {
 	Do(*http.Request) (*http.Response, error)
 }

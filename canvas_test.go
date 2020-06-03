@@ -104,7 +104,11 @@ func TestAssignments(t *testing.T) {
 }
 
 func TestSetHost(t *testing.T) {
-	trans := defaultCanvas.client.Transport
+	client, ok := defaultCanvas.client.(*client)
+	if !ok {
+		t.Error("could not get the client")
+	}
+	trans := client.Transport
 	auth, ok := trans.(*auth)
 	if !ok {
 		t.Fatalf("could not set a host for this transport: %T", trans)
@@ -116,11 +120,11 @@ func TestSetHost(t *testing.T) {
 	if auth.host != "test.host" {
 		t.Error("did not set correct host")
 	}
-	defaultCanvas.client.Transport = http.DefaultTransport
+	client.Transport = http.DefaultTransport
 	if err := SetHost("test1.host"); err == nil {
-		t.Errorf("expected an error for setting host on %T", defaultCanvas.client.Transport)
+		t.Errorf("expected an error for setting host on %T", client.Transport)
 	}
-	defaultCanvas.client.Transport = auth
+	client.Transport = auth
 	auth.host = host
 }
 
@@ -153,19 +157,18 @@ func TestCanvas_Err(t *testing.T) {
 
 func TestCalendarEvents(t *testing.T) {
 	course := testCourse()
-	contextCode := fmt.Sprintf("course_%d", course.ID)
-	now := time.Now().UTC()
 	event, err := CreateCalendarEvent(&CalendarEvent{
 		Title:       "test event",
 		Description: "this is a test event and should not exists, please delete me",
-		StartAt:     now,
+		StartAt:     time.Now().UTC(),
 		AllDay:      true,
-		ContextCode: contextCode,
+		ContextCode: course.ContextCode(),
 	})
 	if err != nil {
 		t.Error(err)
 	}
-	calendar, err := CalendarEvents(ArrayOpt("context_codes", contextCode))
+	calendar, err := CalendarEvents(
+		ArrayOpt("context_codes", course.ContextCode()))
 	if err != nil {
 		t.Error(err)
 	}
@@ -272,6 +275,7 @@ func TestUser(t *testing.T) {
 			fn(w, r)
 		}
 	})
+
 	user, err := GetUser(2)
 	is.NoErr(err)
 	is.Equal(user.ID, 2)
@@ -281,14 +285,15 @@ func TestUser(t *testing.T) {
 		is.Equal(f.ID, 569)
 	}
 	is.Equal(i, nfiles)
+
 	files, err := user.ListFiles()
 	is.NoErr(err)
 	is.Equal(len(files), nfiles)
+
 	folder, err := user.CreateFolder("tests")
-	if err != nil {
-		t.Error(err)
-	}
+	is.NoErr(err)
 	is.True(folder != nil)
+
 	folders, err := user.ListFolders()
 	is.NoErr(err)
 	is.Equal(len(folders), nfiles)
@@ -310,18 +315,6 @@ func TestSearchUser(t *testing.T) {
 	}
 }
 
-func TestCourses(t *testing.T) {
-	courses, err := Courses()
-	if err != nil {
-		t.Error(err)
-	}
-	for _, c := range courses {
-		if c.ID == 0 {
-			t.Error("bad course id")
-		}
-	}
-}
-
 func TestCourse_Settings(t *testing.T) {
 	c := testCourse()
 	settings, err := c.Settings()
@@ -339,7 +332,7 @@ func TestCourse_Settings(t *testing.T) {
 	}
 }
 
-func TestCourseFileObjects(t *testing.T) {
+func TestJoinFileObjs(t *testing.T) {
 	c := testCourse()
 	folder, err := c.CreateFolder(path.Join("/", t.Name()))
 	if err != nil {
@@ -375,6 +368,7 @@ func TestCourseFileObjects(t *testing.T) {
 }
 
 func TestCourse_Settings_Err(t *testing.T) {
+	t.Skip("this test is usless")
 	c := testCourse()
 	defer deauthorize(c.client)()
 	_, err := c.UpdateSettings(nil)
@@ -446,6 +440,7 @@ func TestCourse_User(t *testing.T) {
 }
 
 func TestCourse_DiscussionTopics(t *testing.T) {
+	t.Skip("this test is usless")
 	c := testCourse()
 	discs, err := c.DiscussionTopics()
 	if err != nil {

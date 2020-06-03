@@ -13,6 +13,7 @@ import (
 )
 
 func TestPager(t *testing.T) {
+	t.Skip("not done with this test")
 	client := &http.Client{}
 	authorize(client, testToken(), DefaultHost)
 

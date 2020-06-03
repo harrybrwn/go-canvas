@@ -1,5 +1,5 @@
 # go-canvas
-A (very incomplete) api client for Instructure's Canvas API.
+An API client for Instructure's Canvas API.
 
 [![Build Status](https://travis-ci.com/harrybrwn/go-canvas.svg?branch=master)](https://travis-ci.com/harrybrwn/go-canvas)
 [![GoDoc](https://godoc.org/github.com/github.com/harrybrwn/go-canvas?status.svg)](https://pkg.go.dev/github.com/harrybrwn/go-canvas?tab=doc)
@@ -17,14 +17,27 @@ go get github.com/harrybrwn/go-canvas
 2. Give the token to the library
     * Set `$CANVAS_TOKEN` environment variable
     * Call `canvas.SetToken` or `canvas.New`
+3. For more advance usage, viewing the [canvas API docs](https://canvas.instructure.com/doc/api/index.html) and using the `canvas.Option` interface will be usful for more fine-tuned api use.
 
-### Warning
-Everything that is related to the `canvas.Account` struct is not as extensivly tested because I can't figure out how to get access to one for testing.
+### Concurrent Error Handling
+Error handling for functions that return a channel and no error is done with a callback. This callback is called `ConcurrentErrorHandler` and in some cases, a struct may have a `SetErrorHandler` function.
+```go
+canvas.ConcurrentErrorHandler = func(e error) error {
+    if canvas.IsRateLimit(e) {
+        fmt.Println("rate limit reached")
+        return nil
+    }
+    return e
+}
+for f := range canvas.Files() {
+    fmt.Println(f.Filename, f.ID)
+}
+```
 
-# TODO
+## TODO
 * Groups
 * Outcome Groups
 * Favorites
 * Submissions
-    * assignments
-    * file uploads
+    * submiting assignments
+    * file upload on assginments

@@ -57,19 +57,20 @@ func New(token string) *Canvas {
 // WithHost will create a canvas object that uses a
 // different hostname.
 func WithHost(token, host string) *Canvas {
-	c := &Canvas{client: &http.Client{}}
-	authorize(c.client, token, host)
-	return c
+	c := http.Client{}
+	authorize(&c, token, host)
+	return &Canvas{&client{Client: c, host: host}}
 }
 
-// Canvas is the main api controller.
+// Canvas is the main api entry point.
 type Canvas struct {
-	client *http.Client
+	client doer
+	// client *client
 }
 
 // SetHost will set the host for the canvas requestor.
 func (c *Canvas) SetHost(host string) error {
-	auth, ok := c.client.Transport.(*auth)
+	auth, ok := c.client.(*client).Transport.(*auth)
 	if !ok {
 		return errors.New("could not set canvas host")
 	}
@@ -616,16 +617,31 @@ func getUser(c doer, pathVar interface{}, opts []Option) (u *User, err error) {
 	return u, nil
 }
 
-func getCourses(c doer, path string, vals encoder) (crs []*Course, err error) {
-	err = getjson(c, &crs, vals, path)
-	if err != nil {
-		return nil, err
+func getCourses(c doer, path string, opts optEnc) (crs []*Course, err error) {
+	ch := make(chan *Course)
+	pager := newPaginatedList(
+		c, path, func(r io.Reader) error {
+			list := make([]*Course, 0)
+			if err := json.NewDecoder(r).Decode(&list); err != nil {
+				return err
+			}
+			for _, course := range list {
+				course.client = c
+				course.errorHandler = ConcurrentErrorHandler
+				ch <- course
+			}
+			return nil
+		}, opts,
+	)
+	errs := pager.start()
+	for {
+		select {
+		case course := <-ch:
+			crs = append(crs, course)
+		case err := <-errs:
+			return crs, err
+		}
 	}
-	for i := range crs {
-		crs[i].client = c
-		crs[i].errorHandler = ConcurrentErrorHandler
-	}
-	return crs, nil
 }
 
 func createBookmark(d doer, id interface{}, b *Bookmark) error {

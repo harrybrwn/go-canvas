@@ -53,9 +53,8 @@ type File struct {
 	URL      string `json:"url"`
 	UUID     string `json:"uuid"`
 
-	Filename    string `json:"filename"`
-	DisplayName string `json:"display_name"`
-
+	Filename    string    `json:"filename"`
+	DisplayName string    `json:"display_name"`
 	ContentType string    `json:"content-type"`
 	Size        int       `json:"size"`
 	CreatedAt   time.Time `json:"created_at"`

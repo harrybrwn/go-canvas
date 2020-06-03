@@ -48,6 +48,10 @@ func (u *User) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(u.client, u.id("/users/%d/courses"), optEnc(opts))
 }
 
+func (u *User) FavoriteCourses(opts ...Option) ([]*Course, error) {
+	return getCourses(u.client, "/users/favorites/courses", optEnc(opts))
+}
+
 // File will get a user's file by id
 func (u *User) File(id int, opts ...Option) (*File, error) {
 	return getUserFile(u.client, id, u.ID, opts)
@@ -106,10 +110,17 @@ func (u *User) UploadFile(
 func (u *User) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)
 	return createFolder(
-		u.client, dir,
-		name, opts,
+		u.client,
+		dir,
+		name,
+		opts,
 		"/users/%d/folders", u.ID,
 	)
+}
+
+// ContextCode returns the context code for the user.
+func (u *User) ContextCode() string {
+	return fmt.Sprintf("user_%d", u.ID)
 }
 
 // CalendarEvents gets the user's calendar events.
