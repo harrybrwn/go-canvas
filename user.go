@@ -48,6 +48,7 @@ func (u *User) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(u.client, u.id("/users/%d/courses"), optEnc(opts))
 }
 
+// FavoriteCourses returns the user's list of favorites courses.
 func (u *User) FavoriteCourses(opts ...Option) ([]*Course, error) {
 	return getCourses(u.client, "/users/favorites/courses", optEnc(opts))
 }

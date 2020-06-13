@@ -1,3 +1,6 @@
+// Package canvas is an API wrapper for Instructure's Canvas API written in Go.
+//
+// For the official Canvas API documentation, see https://canvas.instructure.com/doc/api/all_resources.html
 package canvas
 
 import (
