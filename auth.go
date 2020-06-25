@@ -69,39 +69,27 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 }
 
 func get(c doer, endpoint string, vals encoder) (*http.Response, error) {
-	var q string
-	if vals != nil {
-		q = vals.Encode()
-	}
-	return do(c, newreq("GET", endpoint, q))
+	return do(c, newreq("GET", endpoint, vals))
 }
 
 func put(c doer, endpoint string, vals encoder) (*http.Response, error) {
-	var q string
-	if vals != nil {
-		q = vals.Encode()
-	}
-	return do(c, newreq("PUT", endpoint, q))
+	return do(c, newreq("PUT", endpoint, vals))
 }
 
 func post(c doer, endpoint string, vals encoder) (*http.Response, error) {
-	var q string
-	if vals != nil {
-		q = vals.Encode()
-	}
-	return do(c, newreq("POST", endpoint, q))
+	return do(c, newreq("POST", endpoint, vals))
 }
 
 func delete(c doer, endpoint string, vals encoder) (*http.Response, error) {
-	var q string
-	if vals != nil {
-		q = vals.Encode()
-	}
-	return do(c, newreq("DELETE", endpoint, q))
+	return do(c, newreq("DELETE", endpoint, vals))
 }
 
-func newreq(method, urlpath, query string) *http.Request {
-	return newV1Req(method, urlpath, query)
+func newreq(method, urlpath string, query encoder) *http.Request {
+	var q string
+	if query != nil {
+		q = query.Encode()
+	}
+	return newV1Req(method, urlpath, q)
 }
 
 func newV1Req(method, urlpath, query string) *http.Request {

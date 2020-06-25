@@ -17,7 +17,7 @@ func TestPager(t *testing.T) {
 	client := &http.Client{}
 	authorize(client, testToken(), DefaultHost)
 
-	req := newreq("GET", "/users/self/files", "")
+	req := newreq("GET", "/users/self/files", nil)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Error("could not do request:", err)

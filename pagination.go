@@ -142,7 +142,7 @@ func (p *paginated) start() <-chan error {
 				p.errs <- err
 				return // stop bc we won't have data to send
 			}
-			// Using page - 1 because my interface will index from 0 not 1
+			// Using page - 1 because pagereaders index from 0 not 1
 			if err = p.send(&pagereader{page - 1, resp.Body}); err != nil {
 				p.errs <- err
 			}

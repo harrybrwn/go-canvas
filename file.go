@@ -558,7 +558,7 @@ func uploadFile(
 	q := params{"name": {filename}}
 	q.Add(opts)
 
-	req := newreq("POST", path, q.Encode())
+	req := newreq("POST", path, q)
 	resp, err := do(d, req)
 	if err != nil {
 		return nil, err

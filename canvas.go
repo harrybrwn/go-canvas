@@ -91,6 +91,33 @@ func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(c.client, "/courses", optEnc(opts))
 }
 
+func getCourses(c doer, path string, opts optEnc) (crs []*Course, err error) {
+	ch := make(chan *Course)
+	pager := newPaginatedList(
+		c, path, func(r io.Reader) error {
+			list := make([]*Course, 0)
+			if err := json.NewDecoder(r).Decode(&list); err != nil {
+				return err
+			}
+			for _, course := range list {
+				course.client = c
+				course.errorHandler = ConcurrentErrorHandler
+				ch <- course
+			}
+			return nil
+		}, opts,
+	)
+	errs := pager.start()
+	for {
+		select {
+		case course := <-ch:
+			crs = append(crs, course)
+		case err := <-errs:
+			return crs, err
+		}
+	}
+}
+
 // GetCourse will get a course given a course id.
 func GetCourse(id int, opts ...Option) (*Course, error) { return defaultCanvas.GetCourse(id, opts...) }
 
@@ -618,33 +645,6 @@ func getUser(c doer, pathVar interface{}, opts []Option) (u *User, err error) {
 		return nil, err
 	}
 	return u, nil
-}
-
-func getCourses(c doer, path string, opts optEnc) (crs []*Course, err error) {
-	ch := make(chan *Course)
-	pager := newPaginatedList(
-		c, path, func(r io.Reader) error {
-			list := make([]*Course, 0)
-			if err := json.NewDecoder(r).Decode(&list); err != nil {
-				return err
-			}
-			for _, course := range list {
-				course.client = c
-				course.errorHandler = ConcurrentErrorHandler
-				ch <- course
-			}
-			return nil
-		}, opts,
-	)
-	errs := pager.start()
-	for {
-		select {
-		case course := <-ch:
-			crs = append(crs, course)
-		case err := <-errs:
-			return crs, err
-		}
-	}
 }
 
 func createBookmark(d doer, id interface{}, b *Bookmark) error {
