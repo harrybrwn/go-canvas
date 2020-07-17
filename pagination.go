@@ -162,11 +162,57 @@ func (p *paginated) Close() {
 
 func (p *paginated) getPageQuery(page int) params {
 	q := params{
-		"page":     {strconv.FormatInt(int64(page), 10)}, // base 10
-		"per_page": {fmt.Sprintf("%d", p.perpage)},
+		"page":     {strconv.Itoa(page)},
+		"per_page": {strconv.Itoa(p.perpage)},
 	}
 	q.Add(p.opts)
 	return q
+}
+
+func getList(d doer, init func(io.Reader) error, path string, opts []Option) error {
+	if opts == nil {
+		opts = []Option{}
+	}
+	var (
+		page    = 1
+		perpage = 10
+	)
+	p := params{
+		"page":     {strconv.Itoa(page)},
+		"per_page": {strconv.Itoa(perpage)},
+	}
+	p.Add(opts)
+	resp, err := get(d, path, p)
+
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	n, err := findlastpage(resp.Header)
+	if err != nil {
+		return err
+	}
+	if err = init(resp.Body); err != nil {
+		return err
+	}
+
+	for page := 2; page < n; page++ {
+		p := params{
+			"page":     {strconv.Itoa(page)},
+			"per_page": {strconv.Itoa(perpage)},
+		}
+		p.Add(opts)
+		resp, err = get(d, path, p)
+		if err != nil {
+			return err
+		}
+		if err = init(resp.Body); err != nil {
+			resp.Body.Close()
+			return err
+		}
+		resp.Body.Close()
+	}
+	return nil
 }
 
 var (

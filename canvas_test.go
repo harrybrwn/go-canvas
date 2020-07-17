@@ -342,7 +342,8 @@ func TestJoinFileObjs(t *testing.T) {
 		t.Error(err)
 	}
 	if folder.Foldername != t.Name() {
-		t.Errorf("could not rename the new file to %s", t.Name())
+		// t.Errorf("could not rename the new file to %s", t.Name())
+		t.Errorf("expected file name to be %s; got %s", t.Name(), folder.Foldername)
 	}
 	for f := range JoinFileObjs(c.Files(), c.Folders()) {
 		if f.GetID() == 0 {
@@ -358,6 +359,9 @@ func TestJoinFileObjs(t *testing.T) {
 	}
 	if len(list) < 1 {
 		t.Error("could not find main.go")
+	}
+	if list[0].client == nil {
+		t.Fatal("client is nil")
 	}
 	if err = list[0].Copy(folder); err != nil {
 		t.Error(err)

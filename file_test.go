@@ -27,6 +27,25 @@ func testCourseRoot() *Folder {
 	return courseRoot
 }
 
+func TestListFiles(t *testing.T) {
+	c := testCourse()
+	files, err := c.ListFiles(Opt("sort", "name"))
+	if err != nil {
+		t.Error(err)
+	}
+	n := 0
+	for range files {
+		n++
+	}
+	n2 := 0
+	for range c.Files() {
+		n2++
+	}
+	if n != n2 {
+		t.Error("should have been the same number of files")
+	}
+}
+
 func TestFolders(t *testing.T) {
 	is := is.New(t)
 	folder := NewFolder("test")

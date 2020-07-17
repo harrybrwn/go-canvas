@@ -629,22 +629,57 @@ func (f *fileupload) upload(d doer, filename string, r io.Reader) (*File, error)
 }
 
 func listFiles(d doer, path string, parent *Folder, opts []Option) ([]*File, error) {
-	ch := make(chan *File)
-	page := newPaginatedList(
-		d, path, sendFilesFunc(d, ch, parent),
-		opts,
+	if opts == nil {
+		opts = []Option{}
+	}
+	var (
+		page     = 1
+		perpage  = 10
+		files    []*File
+		tmpfiles []*File = make([]*File, 10)
 	)
-	files := make([]*File, 0)
-	errs := page.start()
-	for {
-		select {
-		case file := <-ch:
-			files = append(files, file)
-		case err := <-errs:
-			close(ch)
+	p := params{
+		"page":     {strconv.Itoa(page)},
+		"per_page": {strconv.Itoa(perpage)},
+	}
+	p.Add(opts)
+	resp, err := get(d, path, p)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	n, err := findlastpage(resp.Header)
+	if err != nil {
+		return nil, err
+	}
+	files = make([]*File, 0, n*perpage)
+
+	if err := json.NewDecoder(resp.Body).Decode(&tmpfiles); err != nil {
+		return nil, err
+	}
+	files = append(files, tmpfiles...)
+
+	for page = 2; page <= n; page++ {
+		p := params{
+			"page":     {strconv.Itoa(page)},
+			"per_page": {strconv.Itoa(perpage)},
+		}
+		p.Add(opts)
+		resp, err = get(d, path, p)
+		if err != nil {
 			return files, err
 		}
+		if err = json.NewDecoder(resp.Body).Decode(&tmpfiles); err != nil {
+			resp.Body.Close()
+			return files, err
+		}
+		files = append(files, tmpfiles...)
+		resp.Body.Close()
 	}
+	for i := range files {
+		files[i].client = d
+	}
+	return files, nil
 }
 
 func listFolders(d doer, path string, parent *Folder, opts []Option) ([]*Folder, error) {
