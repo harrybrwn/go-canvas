@@ -104,7 +104,7 @@ func TestAssignments(t *testing.T) {
 }
 
 func TestSetHost(t *testing.T) {
-	client, ok := defaultCanvas.client.(*client)
+	client, ok := ca.client.(*client)
 	if !ok {
 		t.Error("could not get the client")
 	}
@@ -414,7 +414,7 @@ func TestBookmarks(t *testing.T) {
 		}
 		is.NoErr(DeleteBookmark(&b))
 	}
-	defer deauthorize(defaultCanvas.client)()
+	defer deauthorize(ca.client)()
 	err = CreateBookmark(&Bookmark{
 		Name: "test bookmark",
 		URL:  fmt.Sprintf("https://%s/courses/%d/assignments", DefaultHost, c.ID),
@@ -707,10 +707,10 @@ func writeTestFile(t *testing.T, file string, w io.Writer) {
 }
 
 func swapCanvas(c *Canvas) func() {
-	reset := defaultCanvas
-	defaultCanvas = c
+	reset := ca
+	ca = c
 	return func() {
-		defaultCanvas = reset
+		ca = reset
 	}
 }
 

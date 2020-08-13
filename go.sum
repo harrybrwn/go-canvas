@@ -1,6 +1,8 @@
-github.com/google/go-querystring v1.0.0 h1:Xkwi/a1rcvNg1PPYe5vI8GbeBY/jrVuDX5ASuANWTrk=
-github.com/google/go-querystring v1.0.0/go.mod h1:odCYkC5MyYFN7vkCjXpyrEuKhc/BUO6wN/zVPAxq5ck=
 github.com/harrybrwn/errs v0.0.2-0.20200523142445-e4279967174e h1:RtaB1O5oXuA5jbz3TprWGk3KcfsaS5pkBnanTARjXSI=
 github.com/harrybrwn/errs v0.0.2-0.20200523142445-e4279967174e/go.mod h1:xekiTrup1h5u3YF9bpJT7qD1cmgYBA8qN9iHd/h/sho=
+github.com/harrybrwn/go-querystring v1.0.1-0.20200812224045-b8d23937d4e6 h1:UzOAhOSUmCTAs0bpds6deYns16sJTQ6T01+r2OIGoEU=
+github.com/harrybrwn/go-querystring v1.0.1-0.20200812224045-b8d23937d4e6/go.mod h1:vgIvUzro/BNvc4qAmR133SLQZDvURWGxCesSpBnjeQc=
+github.com/harrybrwn/go-querystring v1.0.1-0.20200812230556-de172bc021ad h1:1aAZGfm8SrKkfVODudFMNcDNq2eflHTxFXqjzucxNOA=
+github.com/harrybrwn/go-querystring v1.0.1-0.20200812230556-de172bc021ad/go.mod h1:vgIvUzro/BNvc4qAmR133SLQZDvURWGxCesSpBnjeQc=
 github.com/matryer/is v1.3.0 h1:9qiso3jaJrOe6qBRJRBt2Ldht05qDiFP9le0JOIhRSI=
 github.com/matryer/is v1.3.0/go.mod h1:2fLPjFQM9rhQ15aVEtbuwhJinnOqrmgXPNdZsdwlWXA=

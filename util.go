@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"net/url"
+	"path/filepath"
 )
 
 type params map[string][]string
@@ -42,3 +43,49 @@ func pathFromContextType(contextType string) string {
 }
 
 var _ encoder = (*params)(nil)
+
+func filenameContentType(filename string) string {
+	ext := filepath.Ext(filename)
+	if ext[0] == '.' {
+		ext = ext[1:]
+	}
+	switch ext {
+	case "pdf":
+		return "application/pdf"
+	case "doc":
+		return "application/msword"
+	case "docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case "ppt":
+		return "application/vnd.ms-powerpoint"
+	case "pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case "xls":
+		return "application/vnd.ms-excel"
+	case "xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case "zip":
+		return "application/zip"
+	case "gz":
+		return "application/gzip"
+	case "json":
+		return "application/json"
+	case "xml":
+		return "application/xml"
+	case "png":
+		return "image/png"
+	case "jpeg", "jpg":
+		return "image/jpeg"
+	case "gif":
+		return "image/gif"
+	case "svg":
+		return "image/svg+xml"
+	case "html", "htm":
+		return "text/html"
+	case "cpp", "hpp":
+		return "text/x-c++src"
+	case "txt":
+		return "text/plain"
+	}
+	return ""
+}

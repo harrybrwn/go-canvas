@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/harrybrwn/errs"
+	"github.com/harrybrwn/go-querystring/query"
 )
 
 // FileObjType is the type of a file
@@ -219,38 +220,36 @@ func (f *File) strID() string {
 //
 // This function may make an http request to find the parent folder.
 func (f *File) AsWriteCloser() (io.WriteCloser, error) {
-	var (
-		opts = make([]Option, 0, 1)
-		path = "/users/self/files"
-	)
+	var path = "/users/self/files"
 	if f.Filename == "" {
 		return nil, errs.New("cannot make a WriteCloser: file has no filename")
 	}
+	params := &fileUploadParams{
+		Name: f.Filename,
+	}
 	parent, err := f.ParentFolder()
 	if err != nil && parent != nil {
-		opts = append(opts, Opt("parent_folder_id", parent.ID))
+		params.ParentFolderID = parent.ID
 		if parent.ContextType != "" {
 			ctxPath := pathFromContextType(parent.ContextType)
 			path = fmt.Sprintf("%s/%d/files", ctxPath, parent.ContextID)
 		}
 	}
 	return &fileWriter{
-		buf:      new(bytes.Buffer),
-		filename: f.Filename,
-		opts:     opts,
-		path:     path,
-		d:        f.client,
-		file:     f,
+		buf:    new(bytes.Buffer),
+		params: params,
+		path:   path,
+		d:      f.client,
+		file:   f,
 	}, nil
 }
 
 type fileWriter struct {
-	file     *File
-	buf      *bytes.Buffer
-	filename string
-	opts     []Option
-	path     string
-	d        doer
+	file   *File
+	buf    *bytes.Buffer
+	params *fileUploadParams
+	path   string
+	d      doer
 }
 
 func (fw *fileWriter) Write(b []byte) (int, error) {
@@ -258,7 +257,7 @@ func (fw *fileWriter) Write(b []byte) (int, error) {
 }
 
 func (fw *fileWriter) Close() error {
-	file, err := uploadFile(fw.d, fw.filename, fw.buf, fw.path, fw.opts)
+	file, err := uploadFile(fw.d, fw.buf, fw.path, fw.params)
 	if err != nil {
 		return err
 	}
@@ -481,9 +480,13 @@ func (f *Folder) UploadFile(
 	r io.Reader,
 	opts ...Option,
 ) (*File, error) {
-	opts = append(opts, Opt("parent_folder_id", f.ID))
 	path := fmt.Sprintf("/folders/%d/files", f.ID)
-	return uploadFile(f.client, filename, r, path, opts)
+	params := fileUploadParams{
+		Name:           filename,
+		ParentFolderID: f.ID,
+	}
+	params.setOptions(opts)
+	return uploadFile(f.client, r, path, &params)
 }
 
 // https://canvas.instructure.com/doc/api/files.html#method.folders.update
@@ -547,42 +550,129 @@ func createFolder(
 	return f, json.NewDecoder(resp.Body).Decode(f)
 }
 
+type fileUploadParams struct {
+	// Name of the file being uploaded, '/' or '\' are treated
+	// as part of the filename not a path
+	Name string `url:"name,omitempty"`
+	// Size of the file being uploaded
+	Size int `url:"size,omitempty"`
+	// OnDuplicate tells the server what to do when the file being uploaded
+	// already exists. This option is ignored if there are no parent folder
+	// options specified.
+	// default: "overwrite"
+	// can be any of...
+	//	- "overwrite"
+	//	- "rename"
+	OnDuplicate      string `url:"on_duplicate,omitempty"`
+	ContentType      string `url:"content_type,omitempty"`
+	ParentFolderID   int    `url:"parent_folder_id,omitempty"`
+	ParentFolderPath string `url:"parent_folder_path,omitempty"`
+	// These will be set as if it were an "include[]" parameter
+	// when the upload returns a canvas file.
+	SuccessInclude []string `url:"success_include,omitempty"`
+}
+
+func (up *fileUploadParams) asOptions() []Option {
+	q, err := query.Values(up)
+	if err != nil {
+		return nil
+	}
+	opts := make([]Option, 0, len(q))
+	for k, v := range q {
+		opts = append(opts, &arropt{key: k, vals: v})
+	}
+	return opts
+}
+
+func (up *fileUploadParams) setOptions(opts []Option) {
+	var vals []string
+	for _, opt := range opts {
+		vals = opt.Value()
+		if len(vals) < 1 {
+			continue
+		}
+
+		// I hate this too... sorry
+		switch opt.Name() {
+		case "name":
+			up.Name = vals[0]
+		case "on_duplicate":
+			up.OnDuplicate = vals[0]
+		case "content_type":
+			up.ContentType = vals[0]
+		case "parent_folder_path":
+			up.ParentFolderPath = vals[0]
+		case "success_include", "include", "include[]":
+			for _, v := range vals {
+				up.SuccessInclude = append(up.SuccessInclude, v)
+			}
+		case "size":
+			if o, ok := opt.(*option); ok {
+				if size, ok := o.val.(int); ok {
+					up.Size = size
+				}
+				continue
+			}
+			up.Size, _ = strconv.Atoi(vals[0])
+		case "parent_folder_id":
+			if ov, ok := opt.(*option); ok {
+				if id, ok := ov.val.(int); ok {
+					up.ParentFolderID = id
+				}
+				continue
+			}
+			up.ParentFolderID, _ = strconv.Atoi(vals[0])
+		}
+	}
+}
+
+func (up *fileUploadParams) Encode() string {
+	q, err := query.Values(up)
+	if err != nil {
+		return ""
+	}
+	return q.Encode()
+}
+
 // https://canvas.instructure.com/doc/api/file.file_uploads.html
 func uploadFile(
 	d doer,
-	filename string,
 	r io.Reader,
-	path string,
-	opts []Option,
+	endpoint string,
+	params *fileUploadParams,
 ) (*File, error) {
-	q := params{"name": {filename}}
-	q.Add(opts)
-
-	req := newreq("POST", path, q)
+	if params.Name == "" {
+		return nil, errors.New("empty filename")
+	}
+	req := newreq("POST", endpoint, params)
 	resp, err := do(d, req)
 	if err != nil {
 		return nil, err
 	}
-	uploader, err := getUploader(resp.Body) // will close the body
+	defer resp.Body.Close()
+	uploader, err := decodeUploader(resp.Body) // will close the body
 	if err != nil {
 		return nil, err
 	}
-	return uploader.upload(d, filename, r)
+	return uploader.upload(d, params.Name, r)
 }
 
-func getUploader(rc io.ReadCloser) (*fileupload, error) {
-	defer rc.Close()
+func decodeUploader(r io.Reader) (*fileupload, error) {
 	b := &bytes.Buffer{}
 	fup := &fileupload{
 		body:   b,
 		writer: multipart.NewWriter(b),
 	}
-	err := json.NewDecoder(rc).Decode(fup)
+	err := json.NewDecoder(r).Decode(fup)
 	if err != nil {
 		return nil, err
 	}
 	for key, value := range fup.UploadParams {
-		fup.writer.WriteField(key, fmt.Sprintf("%v", value))
+		if err = fup.writer.WriteField(key, value); err != nil {
+			// the canvas servers will reject the request if
+			// even one of the upload params is missing
+			return nil, err
+		}
 	}
 	fup.url, err = url.Parse(fup.UploadURL)
 	if err != nil {
@@ -592,10 +682,10 @@ func getUploader(rc io.ReadCloser) (*fileupload, error) {
 }
 
 type fileupload struct {
-	FileParam    string                 `json:"file_param"`
-	Progress     string                 `json:"progress"`
-	UploadURL    string                 `json:"upload_url"`
-	UploadParams map[string]interface{} `json:"upload_params"`
+	FileParam    string            `json:"file_param"`
+	Progress     string            `json:"progress"`
+	UploadURL    string            `json:"upload_url"`
+	UploadParams map[string]string `json:"upload_params"`
 
 	url    *url.URL
 	body   *bytes.Buffer

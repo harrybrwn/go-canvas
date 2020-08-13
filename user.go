@@ -10,23 +10,23 @@ import (
 
 // User is a canvas user
 type User struct {
-	ID              int        `json:"id"`
-	Name            string     `json:"name"`
-	Email           string     `json:"email"`
-	Bio             string     `json:"bio"`
-	SortableName    string     `json:"sortable_name"`
-	ShortName       string     `json:"short_name"`
-	SisUserID       string     `json:"sis_user_id"`
-	SisImportID     int        `json:"sis_import_id"`
-	IntegrationID   string     `json:"integration_id"`
-	CreatedAt       time.Time  `json:"created_at"`
-	LoginID         string     `json:"login_id"`
-	AvatarURL       string     `json:"avatar_url"`
-	Enrollments     Enrollment `json:"enrollments"`
-	Locale          string     `json:"locale"`
-	EffectiveLocale string     `json:"effective_locale"`
-	LastLogin       time.Time  `json:"last_login"`
-	TimeZone        string     `json:"time_zone"`
+	ID              int          `json:"id"`
+	Name            string       `json:"name"`
+	Email           string       `json:"email"`
+	Bio             string       `json:"bio"`
+	SortableName    string       `json:"sortable_name"`
+	ShortName       string       `json:"short_name"`
+	SisUserID       string       `json:"sis_user_id"`
+	SisImportID     int          `json:"sis_import_id"`
+	IntegrationID   string       `json:"integration_id"`
+	CreatedAt       time.Time    `json:"created_at"`
+	LoginID         string       `json:"login_id"`
+	AvatarURL       string       `json:"avatar_url"`
+	Enrollments     []Enrollment `json:"enrollments"`
+	Locale          string       `json:"locale"`
+	EffectiveLocale string       `json:"effective_locale"`
+	LastLogin       time.Time    `json:"last_login"`
+	TimeZone        string       `json:"time_zone"`
 
 	CanUpdateAvatar bool `json:"can_update_avatar"`
 	Permissions     struct {
@@ -104,7 +104,9 @@ func (u *User) UploadFile(
 	r io.Reader,
 	opts ...Option,
 ) (*File, error) {
-	return uploadFile(u.client, filename, r, u.id("/users/%d/files"), opts)
+	params := fileUploadParams{Name: filename}
+	params.setOptions(opts)
+	return uploadFile(u.client, r, u.id("/users/%d/files"), &params)
 }
 
 // CreateFolder will create a new folder.
@@ -175,24 +177,30 @@ func (u *User) GradedSubmissions() (subs []*Submission, err error) {
 
 // Submission is a submission type.
 type Submission struct {
+	// A submission type can be any of:
+	//	- "online_text_entry"
+	//	- "online_url"
+	//	- "online_upload"
+	//	- "media_recording"
+	Type                          string      `json:"submission_type" url:"submission_type"`
 	AssignmentID                  int         `json:"assignment_id"`
 	Assignment                    interface{} `json:"assignment"`
 	Course                        interface{} `json:"course"`
 	Attempt                       int         `json:"attempt"`
-	Body                          string      `json:"body"`
+	Body                          string      `json:"body,omitempty"`
 	Grade                         string      `json:"grade"`
 	GradeMatchesCurrentSubmission bool        `json:"grade_matches_current_submission"`
-	HTMLURL                       string      `json:"html_url"`
+	HTMLURL                       string      `json:"html_url,omitempty"`
 	PreviewURL                    string      `json:"preview_url"`
 	Score                         float64     `json:"score"`
-	SubmissionComments            interface{} `json:"submission_comments"`
-	SubmissionType                string      `json:"submission_type"`
+	Comments                      interface{} `json:"submission_comments"`
 	SubmittedAt                   time.Time   `json:"submitted_at"`
-	URL                           interface{} `json:"url"`
-	UserID                        int         `json:"user_id"`
+	PostedAt                      time.Time   `json:"posted_at"`
+	URL                           string      `json:"url,omitempty"`
 	GraderID                      int         `json:"grader_id"`
 	GradedAt                      time.Time   `json:"graded_at"`
-	User                          interface{} `json:"user"`
+	UserID                        int         `json:"user_id"`
+	User                          interface{} `json:"user" url:"-"`
 	Late                          bool        `json:"late"`
 	AssignmentVisible             bool        `json:"assignment_visible"`
 	Excused                       bool        `json:"excused"`
@@ -203,7 +211,11 @@ type Submission struct {
 	WorkflowState                 string      `json:"workflow_state"`
 	ExtraAttempts                 int         `json:"extra_attempts"`
 	AnonymousID                   string      `json:"anonymous_id"`
-	PostedAt                      time.Time   `json:"posted_at"`
+
+	// Used assignment submission
+	FileIDs          []int  `json:"-" url:"file_ids,omitempty"`
+	MediaCommentID   string `json:"-" url:"media_comment_id,omitempty"`
+	MediaCommentType string `json:"-" url:"media_comment_type,omitempty"` // "audio" or "video"
 }
 
 // Avatars will get a list of the user's avatars.

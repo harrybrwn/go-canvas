@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/google/go-querystring/query"
+	"github.com/harrybrwn/go-querystring/query"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 	DefaultUserAgent = "go-canvas v0.1"
 
 	// DefaultCanvas is the default canvas object
-	defaultCanvas *Canvas
+	ca *Canvas
 )
 
 func init() {
@@ -45,11 +45,11 @@ func init() {
 
 // SetToken will set the package level canvas object token.
 func SetToken(token string) {
-	defaultCanvas = New(token)
+	ca = New(token)
 }
 
 // SetHost will set the package level host.
-func SetHost(host string) error { return defaultCanvas.SetHost(host) }
+func SetHost(host string) error { return ca.SetHost(host) }
 
 // New will create a Canvas struct from an api token.
 // New uses the default host.
@@ -83,7 +83,7 @@ func (c *Canvas) SetHost(host string) error {
 
 // Courses lists all of the courses associated
 // with that canvas object.
-func Courses(opts ...Option) ([]*Course, error) { return defaultCanvas.Courses(opts...) }
+func Courses(opts ...Option) ([]*Course, error) { return ca.Courses(opts...) }
 
 // Courses lists all of the courses associated
 // with that canvas object.
@@ -119,7 +119,7 @@ func getCourses(c doer, path string, opts optEnc) (crs []*Course, err error) {
 }
 
 // GetCourse will get a course given a course id.
-func GetCourse(id int, opts ...Option) (*Course, error) { return defaultCanvas.GetCourse(id, opts...) }
+func GetCourse(id int, opts ...Option) (*Course, error) { return ca.GetCourse(id, opts...) }
 
 // GetCourse will get a course given a course id.
 func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
@@ -133,7 +133,7 @@ func (c *Canvas) GetUser(id int, opts ...Option) (*User, error) {
 }
 
 // GetUser will return a user object given that user's ID.
-func GetUser(id int, opts ...Option) (*User, error) { return defaultCanvas.GetUser(id, opts...) }
+func GetUser(id int, opts ...Option) (*User, error) { return ca.GetUser(id, opts...) }
 
 // CurrentUser get the currently logged in user.
 func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
@@ -141,7 +141,7 @@ func (c *Canvas) CurrentUser(opts ...Option) (*User, error) {
 }
 
 // CurrentUser get the currently logged in user.
-func CurrentUser(opts ...Option) (*User, error) { return defaultCanvas.CurrentUser(opts...) }
+func CurrentUser(opts ...Option) (*User, error) { return ca.CurrentUser(opts...) }
 
 // Todos will get the current user's todo's.
 func (c *Canvas) Todos() ([]TODO, error) {
@@ -150,7 +150,7 @@ func (c *Canvas) Todos() ([]TODO, error) {
 }
 
 // Todos will get the current user's todo's.
-func Todos() ([]TODO, error) { return defaultCanvas.Todos() }
+func Todos() ([]TODO, error) { return ca.Todos() }
 
 // TODO is a to-do struct
 type TODO struct {
@@ -168,7 +168,7 @@ type TODO struct {
 
 // NewFile will make a new file object. This will not
 // send any data to canvas.
-func NewFile(filename string) *File { return defaultCanvas.NewFile(filename) }
+func NewFile(filename string) *File { return ca.NewFile(filename) }
 
 // NewFile will make a new file object. This will not
 // send any data to canvas.
@@ -178,7 +178,7 @@ func (c *Canvas) NewFile(filename string) *File {
 
 // NewFolder will make a new folder object. This will not
 // send any data to canvas.
-func NewFolder(foldername string) *Folder { return defaultCanvas.NewFolder(foldername) }
+func NewFolder(foldername string) *Folder { return ca.NewFolder(foldername) }
 
 // NewFolder will make a new folder object. This will not
 // send any data to canvas.
@@ -192,7 +192,7 @@ func (c *Canvas) GetFile(id int, opts ...Option) (*File, error) {
 }
 
 // GetFile will get a file by the id.
-func GetFile(id int, opts ...Option) (*File, error) { return defaultCanvas.GetFile(id, opts...) }
+func GetFile(id int, opts ...Option) (*File, error) { return ca.GetFile(id, opts...) }
 
 // Files will return a channel of all the default user's files.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_index
@@ -206,11 +206,11 @@ func (c *Canvas) ListFiles(opts ...Option) ([]*File, error) {
 }
 
 // ListFiles will return a slice of the current user's files.
-func ListFiles(opts ...Option) ([]*File, error) { return defaultCanvas.ListFiles(opts...) }
+func ListFiles(opts ...Option) ([]*File, error) { return ca.ListFiles(opts...) }
 
 // Files will return a channel of all the default user's files.
 // https://canvas.instructure.com/doc/api/files.html#method.files.api_index
-func Files(opts ...Option) <-chan *File { return defaultCanvas.Files(opts...) }
+func Files(opts ...Option) <-chan *File { return ca.Files(opts...) }
 
 // Folders returns a channel of folders for the current user.
 func (c *Canvas) Folders(opts ...Option) <-chan *Folder {
@@ -223,7 +223,7 @@ func (c *Canvas) Folders(opts ...Option) <-chan *Folder {
 }
 
 // Folders returns a channel of folders for the current user.
-func Folders(opts ...Option) <-chan *Folder { return defaultCanvas.Folders(opts...) }
+func Folders(opts ...Option) <-chan *Folder { return ca.Folders(opts...) }
 
 // ListFolders will return a slice of the current user's folders
 func (c *Canvas) ListFolders(opts ...Option) ([]*Folder, error) {
@@ -231,7 +231,7 @@ func (c *Canvas) ListFolders(opts ...Option) ([]*Folder, error) {
 }
 
 // ListFolders will return a slice of the current user's folders
-func ListFolders(opts ...Option) ([]*Folder, error) { return defaultCanvas.ListFolders(opts...) }
+func ListFolders(opts ...Option) ([]*Folder, error) { return ca.ListFolders(opts...) }
 
 // FolderPath will get a list of folders in the path given.
 func (c *Canvas) FolderPath(folderpath string) ([]*Folder, error) {
@@ -240,7 +240,7 @@ func (c *Canvas) FolderPath(folderpath string) ([]*Folder, error) {
 }
 
 // FolderPath will get a list of folders in the path given.
-func FolderPath(path string) ([]*Folder, error) { return defaultCanvas.FolderPath(path) }
+func FolderPath(path string) ([]*Folder, error) { return ca.FolderPath(path) }
 
 // Root will get the current user's root folder
 func (c *Canvas) Root(opts ...Option) (*Folder, error) {
@@ -250,7 +250,7 @@ func (c *Canvas) Root(opts ...Option) (*Folder, error) {
 
 // Root will get the current user's root folder
 func Root(opts ...Option) (*Folder, error) {
-	return defaultCanvas.Root(opts...)
+	return ca.Root(opts...)
 }
 
 // CreateFolder will create a new folder.
@@ -261,21 +261,19 @@ func (c *Canvas) CreateFolder(path string, opts ...Option) (*Folder, error) {
 
 // CreateFolder will create a new folder.
 func CreateFolder(path string, opts ...Option) (*Folder, error) {
-	return defaultCanvas.CreateFolder(path, opts...)
+	return ca.CreateFolder(path, opts...)
 }
 
 // UploadFile uploads a file to the current user's files.
 func (c *Canvas) UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
-	return uploadFile(c.client, filename, r, "/users/self/files", opts)
+	p := fileUploadParams{Name: filename}
+	p.setOptions(opts)
+	return uploadFile(c.client, r, "/users/self/files", &p)
 }
 
 // UploadFile uploads a file to the current user's files.
-func UploadFile(
-	filename string,
-	r io.Reader,
-	opts ...Option,
-) (*File, error) {
-	return defaultCanvas.UploadFile(filename, r, opts...)
+func UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
+	return ca.UploadFile(filename, r, opts...)
 }
 
 // CurrentAccount will get the current account.
@@ -285,7 +283,7 @@ func (c *Canvas) CurrentAccount() (a *Account, err error) {
 }
 
 // CurrentAccount will get the current account.
-func CurrentAccount() (a *Account, err error) { return defaultCanvas.CurrentAccount() }
+func CurrentAccount() (a *Account, err error) { return ca.CurrentAccount() }
 
 // Accounts will list the accounts
 func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
@@ -293,7 +291,7 @@ func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
 }
 
 // Accounts will list the accounts
-func Accounts(opts ...Option) ([]Account, error) { return defaultCanvas.Accounts() }
+func Accounts(opts ...Option) ([]Account, error) { return ca.Accounts() }
 
 // CourseAccounts will make a call to the course accounts endpoint
 func (c *Canvas) CourseAccounts(opts ...Option) ([]Account, error) {
@@ -301,7 +299,7 @@ func (c *Canvas) CourseAccounts(opts ...Option) ([]Account, error) {
 }
 
 // CourseAccounts will make a call to the course accounts endpoint
-func CourseAccounts(opts ...Option) ([]Account, error) { return defaultCanvas.CourseAccounts() }
+func CourseAccounts(opts ...Option) ([]Account, error) { return ca.CourseAccounts() }
 
 // Account is an account
 type Account struct {
@@ -345,7 +343,7 @@ func (c *Canvas) SearchAccounts(term string, opts ...Option) ([]Account, error) 
 // SearchAccounts will search for canvas accounts.
 // Options: name, domain, latitude, longitude
 func SearchAccounts(term string, opts ...Option) ([]Account, error) {
-	return defaultCanvas.SearchAccounts(term, opts...)
+	return ca.SearchAccounts(term, opts...)
 }
 
 // Announcements will get the announcements
@@ -376,7 +374,7 @@ func Announcements(
 	contextCodes []string,
 	opts ...Option,
 ) ([]*DiscussionTopic, error) {
-	return defaultCanvas.Announcements(contextCodes, opts...)
+	return ca.Announcements(contextCodes, opts...)
 }
 
 // DiscussionTopic is a discussion topic
@@ -449,7 +447,7 @@ func (c *Canvas) CalendarEvents(opts ...Option) (cal []*CalendarEvent, err error
 
 // CalendarEvents makes a call to get calendar events.
 func CalendarEvents(opts ...Option) ([]*CalendarEvent, error) {
-	return defaultCanvas.CalendarEvents(opts...)
+	return ca.CalendarEvents(opts...)
 }
 
 type calendarEventOptions struct {
@@ -481,7 +479,7 @@ func (c *Canvas) CreateCalendarEvent(event *CalendarEvent) (*CalendarEvent, erro
 // CreateCalendarEvent will send a calendar event to canvas to be created.
 // https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.create
 func CreateCalendarEvent(event *CalendarEvent) (*CalendarEvent, error) {
-	return defaultCanvas.CreateCalendarEvent(event)
+	return ca.CreateCalendarEvent(event)
 }
 
 // UpdateCalendarEvent will update a calendar event. This operation will change
@@ -504,7 +502,7 @@ func (c *Canvas) UpdateCalendarEvent(event *CalendarEvent) error {
 // event given as an argument.
 // https://canvas.instructure.com/doc/api/all_resources.html#method.calendar_events_api.update
 func UpdateCalendarEvent(event *CalendarEvent) error {
-	return defaultCanvas.UpdateCalendarEvent(event)
+	return ca.UpdateCalendarEvent(event)
 }
 
 // DeleteCalendarEventByID will delete a calendar event given its ID.
@@ -522,7 +520,7 @@ func (c *Canvas) DeleteCalendarEventByID(id int, opts ...Option) (*CalendarEvent
 // DeleteCalendarEventByID will delete a calendar event given its ID.
 // This operation returns the calendar event that was deleted.
 func DeleteCalendarEventByID(id int, opts ...Option) (*CalendarEvent, error) {
-	return defaultCanvas.DeleteCalendarEventByID(id, opts...)
+	return ca.DeleteCalendarEventByID(id, opts...)
 }
 
 // DeleteCalendarEvent will delete the calendar event and
@@ -534,7 +532,7 @@ func (c *Canvas) DeleteCalendarEvent(e *CalendarEvent) (*CalendarEvent, error) {
 // DeleteCalendarEvent will delete the calendar event and
 // return the calendar event deleted.
 func DeleteCalendarEvent(e *CalendarEvent) (*CalendarEvent, error) {
-	return defaultCanvas.DeleteCalendarEventByID(e.ID)
+	return ca.DeleteCalendarEventByID(e.ID)
 }
 
 // CalendarEvent is a calendar event
@@ -579,7 +577,7 @@ func (c *Canvas) Conversations(opts ...Option) (conversations []Conversation, er
 
 // Conversations returns a list of conversations
 func Conversations(opts ...Option) ([]Conversation, error) {
-	return defaultCanvas.Conversations(opts...)
+	return ca.Conversations(opts...)
 }
 
 // Conversation is a conversation.
@@ -613,10 +611,10 @@ func (c *Canvas) CreateBookmark(b *Bookmark) error {
 }
 
 // Bookmarks will get the current user's bookmarks.
-func Bookmarks(opts ...Option) ([]Bookmark, error) { return defaultCanvas.Bookmarks(opts...) }
+func Bookmarks(opts ...Option) ([]Bookmark, error) { return ca.Bookmarks(opts...) }
 
 // CreateBookmark will take a bookmark and send it to canvas.
-func CreateBookmark(b *Bookmark) error { return defaultCanvas.CreateBookmark(b) }
+func CreateBookmark(b *Bookmark) error { return ca.CreateBookmark(b) }
 
 // DeleteBookmark will delete a bookmark
 func (c *Canvas) DeleteBookmark(b *Bookmark) error {
@@ -624,7 +622,7 @@ func (c *Canvas) DeleteBookmark(b *Bookmark) error {
 }
 
 // DeleteBookmark will delete a bookmark
-func DeleteBookmark(b *Bookmark) error { return defaultCanvas.DeleteBookmark(b) }
+func DeleteBookmark(b *Bookmark) error { return ca.DeleteBookmark(b) }
 
 // Bookmark is a bookmark object.
 type Bookmark struct {

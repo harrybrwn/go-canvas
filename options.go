@@ -7,23 +7,20 @@ import (
 	"time"
 )
 
+// Course options are given when requesting courses in order to
+// filter out certain courses that may not be wanted in the query.
 var (
-	// CompletedCourses is an option for getting completed courses
-	CompletedCourses Option = Opt("enrollment_state", "completed")
-	// ActiveCourses is an option for getting only active courses
-	ActiveCourses Option = Opt("enrollment_state", "active")
-	// InvitedOrPendingCourses is an option for getting pending courses
+	CompletedCourses        Option = Opt("enrollment_state", "completed")
+	ActiveCourses           Option = Opt("enrollment_state", "active")
 	InvitedOrPendingCourses Option = Opt("enrollment_state", "invited_or_pending")
+)
 
-	// OptTeacher is the teacher enrollment option.
-	OptTeacher Option = Opt("enrollment_type", "teacher")
-	// OptStudent is the student enrollment option.
-	OptStudent Option = Opt("enrollment_type", "student")
-	// OptTA is the TA enrollment option.
-	OptTA Option = Opt("enrollment_type", "ta")
-	// OptObserver is the enrollment option for observers.
+// Enrollment options are given to filter out different types of people
+var (
+	OptTeacher  Option = Opt("enrollment_type", "teacher")
+	OptStudent  Option = Opt("enrollment_type", "student")
+	OptTA       Option = Opt("enrollment_type", "ta")
 	OptObserver Option = Opt("enrollment_type", "observer")
-	// OptDesigner is the enrollment option for designers
 	OptDesigner Option = Opt("enrollment_type", "designer")
 )
 

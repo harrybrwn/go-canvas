@@ -420,6 +420,9 @@ func TestFolder_Copy(t *testing.T) {
 	}
 }
 
+func TestAssignmentUpload(t *testing.T) {
+}
+
 func foldersHandlerFunc(t *testing.T, n int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Link", `<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="current",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="first",<https://canvas.instructure.com/api/v1/courses/000/users?search_term=test&page=1&per_page=10>; rel="last"`)

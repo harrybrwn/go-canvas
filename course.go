@@ -4,15 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"path/filepath"
 	"time"
 
-	"github.com/google/go-querystring/query"
 	"github.com/harrybrwn/errs"
+	"github.com/harrybrwn/go-querystring/query"
 )
 
 // Course represents a canvas course.
+//
 // https://canvas.instructure.com/doc/api/courses.html
 type Course struct {
 	ID                   int           `json:"id"`
@@ -34,10 +36,13 @@ type Course struct {
 	Locale               string        `json:"locale"`
 	Enrollments          []*Enrollment `json:"enrollments"`
 	TotalStudents        int           `json:"total_students"`
-	Calendar             interface{}   `json:"calendar"`
-	DefaultView          string        `json:"default_view"`
-	SyllabusBody         string        `json:"syllabus_body"`
-	NeedsGradingCount    int           `json:"needs_grading_count"`
+	Calendar             struct {
+		// ICS Download is the download link for the calendar
+		ICSDownload string `json:"ics"`
+	} `json:"calendar"`
+	DefaultView       string `json:"default_view"`
+	SyllabusBody      string `json:"syllabus_body"`
+	NeedsGradingCount int    `json:"needs_grading_count"`
 
 	Term           Term           `json:"term"`
 	CourseProgress CourseProgress `json:"course_progress"`
@@ -151,6 +156,7 @@ func (c *Course) User(id int, opts ...Option) (*User, error) {
 
 // Assignment will get an assignment from the course given an id.
 func (c *Course) Assignment(id int, opts ...Option) (ass *Assignment, err error) {
+	ass = &Assignment{client: c.client, courseCode: c.CourseCode}
 	return ass, getjson(c.client, &ass, optEnc(opts), "/courses/%d/assignments/%d", c.ID, id)
 }
 
@@ -326,6 +332,47 @@ type Assignment struct {
 	GraderNamesVisibleToFinalGrader bool `json:"grader_names_visible_to_final_grader" url:"graders_names_visible_to_final_grader,omitempty"`
 	AnonymousGrading                bool `json:"anonymous_grading" url:"anonymous_grading,omitempty"`
 	AllowedAttempts                 int  `json:"allowed_attempts" url:"allowed_attempts,omitempty"`
+
+	courseCode string
+	client     doer
+}
+
+// SubmitFile will submit the contents of an io.Reader as
+// a file to the assignment.
+//
+// https://canvas.instructure.com/doc/api/submissions.html#method.submissions.create
+func (a *Assignment) SubmitFile(filename string, r io.Reader, opts ...Option) error {
+	if filename == "" {
+		if named, ok := r.(interface{ Name() string }); ok {
+			filename = named.Name()
+		}
+	}
+	params := fileUploadParams{
+		Name:        filename,
+		OnDuplicate: "rename",
+		ContentType: filenameContentType(filename),
+	}
+	params.setOptions(opts)
+	if hasstat, ok := r.(interface{ Stat() (os.FileInfo, error) }); ok {
+		stat, err := hasstat.Stat()
+		if err == nil {
+			params.Size = int(stat.Size())
+		}
+	}
+
+	endpoint := fmt.Sprintf("/courses/%d/assignments/%d/submissions/self/files", a.CourseID, a.ID)
+	f, err := uploadFile(a.client, r, endpoint, &params)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%+v\n", f)
+	return nil
+}
+
+// SubmitOsFile is the same as SubmitFile except it takes advantage of
+// the extra file data stored in an *os.File.
+func (a *Assignment) SubmitOsFile(userid int, f *os.File) error {
+	return a.SubmitFile(f.Name(), f)
 }
 
 // TurnitinSettings is a settings struct for turnitin
@@ -442,6 +489,7 @@ func (c *Course) Folder(id int, opts ...Option) (*Folder, error) {
 
 // Root will get the root folder for the course.
 func (c *Course) Root(opts ...Option) (*Folder, error) {
+	// TODO: change this function name to RootFolder, just Root is confusing.
 	f := &Folder{client: c.client}
 	path := c.id("/courses/%d/folders/root")
 	return f, getjson(c.client, f, optEnc(opts), path)
@@ -469,7 +517,9 @@ func (c *Course) CreateFolder(path string, opts ...Option) (*Folder, error) {
 // UploadFile will upload a file to the course.
 // https://canvas.instructure.com/doc/api/courses.html#method.courses.create_file
 func (c *Course) UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
-	return uploadFile(c.client, filename, r, c.id("/courses/%d/files"), opts)
+	p := fileUploadParams{Name: filename}
+	p.setOptions(opts)
+	return uploadFile(c.client, r, c.id("/courses/%d/files"), &p)
 }
 
 // SetErrorHandler will set a error handling callback that is
@@ -539,7 +589,7 @@ type Enrollment struct {
 	HTMLURL string `json:"html_url"`
 	Grades  struct {
 		HTMLURL              string  `json:"html_url"`
-		CurrentScore         string  `json:"current_score"`
+		CurrentScore         float64 `json:"current_score"`
 		CurrentGrade         string  `json:"current_grade"`
 		FinalScore           float64 `json:"final_score"`
 		FinalGrade           string  `json:"final_grade"`
@@ -665,6 +715,8 @@ func (c *Course) assignmentspager(ch chan *Assignment, params []Option) *paginat
 				return err
 			}
 			for _, a := range asses {
+				a.client = c.client
+				a.courseCode = c.CourseCode
 				ch <- a
 			}
 			return nil
