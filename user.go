@@ -98,25 +98,24 @@ func (u *User) FolderPath(pth string) ([]*Folder, error) {
 }
 
 // UploadFile will upload the contents of an io.Reader to a
-// new file in the user's files.
+// new file in the user's files and return the new file.
 func (u *User) UploadFile(
 	filename string,
 	r io.Reader,
 	opts ...Option,
 ) (*File, error) {
-	params := fileUploadParams{Name: filename}
-	params.setOptions(opts)
-	return uploadFile(u.client, r, u.id("/users/%d/files"), &params)
+	return uploadFile(
+		u.client, r,
+		u.id("/users/%d/files"),
+		newFileUploadParams(filename, opts),
+	)
 }
 
 // CreateFolder will create a new folder.
 func (u *User) CreateFolder(path string, opts ...Option) (*Folder, error) {
 	dir, name := filepath.Split(path)
 	return createFolder(
-		u.client,
-		dir,
-		name,
-		opts,
+		u.client, dir, name, opts,
 		"/users/%d/folders", u.ID,
 	)
 }

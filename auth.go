@@ -64,6 +64,8 @@ func do(d doer, req *http.Request) (*http.Response, error) {
 		e = &AuthError{}
 	case http.StatusBadRequest, http.StatusInternalServerError:
 		e = &Error{Status: resp.Status}
+	default:
+		e = &Error{Status: resp.Status}
 	}
 	return nil, errs.Chain(e, json.NewDecoder(resp.Body).Decode(&e), resp.Body.Close())
 }

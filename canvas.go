@@ -83,10 +83,14 @@ func (c *Canvas) SetHost(host string) error {
 
 // Courses lists all of the courses associated
 // with that canvas object.
+//
+// https://canvas.instructure.com/doc/api/courses.html#method.courses.index
 func Courses(opts ...Option) ([]*Course, error) { return ca.Courses(opts...) }
 
 // Courses lists all of the courses associated
 // with that canvas object.
+//
+// https://canvas.instructure.com/doc/api/courses.html#method.courses.index
 func (c *Canvas) Courses(opts ...Option) ([]*Course, error) {
 	return getCourses(c.client, "/courses", optEnc(opts))
 }
@@ -118,10 +122,39 @@ func getCourses(c doer, path string, opts optEnc) (crs []*Course, err error) {
 	}
 }
 
+// CoursesChan returns a channel of courses
+func CoursesChan(opts ...Option) <-chan *Course {
+	return ca.CoursesChan(opts...)
+}
+
+// CoursesChan returns a channel of courses
+func (c *Canvas) CoursesChan(opts ...Option) <-chan *Course {
+	ch := make(courseChan)
+	pager := newPaginatedList(
+		c.client, "/courses", func(r io.Reader) error {
+			list := make([]*Course, 0)
+			if err := json.NewDecoder(r).Decode(&list); err != nil {
+				return err
+			}
+			for _, course := range list {
+				course.client = c.client
+				course.errorHandler = ConcurrentErrorHandler
+				ch <- course
+			}
+			return nil
+		}, opts)
+	go handleErrs(pager.start(), ch, ConcurrentErrorHandler)
+	return ch
+}
+
 // GetCourse will get a course given a course id.
+//
+// https://canvas.instructure.com/doc/api/courses.html#method.courses.show
 func GetCourse(id int, opts ...Option) (*Course, error) { return ca.GetCourse(id, opts...) }
 
 // GetCourse will get a course given a course id.
+//
+// https://canvas.instructure.com/doc/api/courses.html#method.courses.show
 func (c *Canvas) GetCourse(id int, opts ...Option) (*Course, error) {
 	course := &Course{client: c.client, errorHandler: ConcurrentErrorHandler}
 	return course, getjson(c.client, &course, optEnc(opts), "/courses/%d", id)
@@ -266,9 +299,10 @@ func CreateFolder(path string, opts ...Option) (*Folder, error) {
 
 // UploadFile uploads a file to the current user's files.
 func (c *Canvas) UploadFile(filename string, r io.Reader, opts ...Option) (*File, error) {
-	p := fileUploadParams{Name: filename}
-	p.setOptions(opts)
-	return uploadFile(c.client, r, "/users/self/files", &p)
+	return uploadFile(
+		c.client, r, "/users/self/files",
+		newFileUploadParams(filename, opts),
+	)
 }
 
 // UploadFile uploads a file to the current user's files.

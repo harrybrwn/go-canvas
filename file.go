@@ -224,9 +224,7 @@ func (f *File) AsWriteCloser() (io.WriteCloser, error) {
 	if f.Filename == "" {
 		return nil, errs.New("cannot make a WriteCloser: file has no filename")
 	}
-	params := &fileUploadParams{
-		Name: f.Filename,
-	}
+	params := newFileUploadParams(f.Filename, nil)
 	parent, err := f.ParentFolder()
 	if err != nil && parent != nil {
 		params.ParentFolderID = parent.ID
@@ -634,6 +632,12 @@ func (up *fileUploadParams) Encode() string {
 	return q.Encode()
 }
 
+func newFileUploadParams(filename string, opts []Option) *fileUploadParams {
+	p := &fileUploadParams{Name: filename}
+	p.setOptions(opts)
+	return p
+}
+
 // https://canvas.instructure.com/doc/api/file.file_uploads.html
 func uploadFile(
 	d doer,
@@ -807,18 +811,6 @@ var (
 	_ FileObj        = (*Folder)(nil)
 )
 
-type fileChan chan *File
-
-func (fc fileChan) Close() {
-	close(fc)
-}
-
-type folderChan chan *Folder
-
-func (fc folderChan) Close() {
-	close(fc)
-}
-
 func (f *File) setclient(d doer) {
 	f.client = d
 }
@@ -826,3 +818,13 @@ func (f *File) setclient(d doer) {
 func (f *Folder) setclient(d doer) {
 	f.client = d
 }
+
+type (
+	fileChan   chan *File
+	folderChan chan *Folder
+	courseChan chan *Course
+)
+
+func (fc fileChan) Close()   { close(fc) }
+func (fc folderChan) Close() { close(fc) }
+func (cc courseChan) Close() { close(cc) }

@@ -48,7 +48,7 @@ type Course struct {
 	CourseProgress CourseProgress `json:"course_progress"`
 
 	ApplyAssignmentGroupWeights bool `json:"apply_assignment_group_weights"`
-	Permissions                 struct {
+	UserPermissions             struct {
 		CreateDiscussionTopic bool `json:"create_discussion_topic"`
 		CreateAnnouncement    bool `json:"create_announcement"`
 	} `json:"permissions"`
@@ -100,6 +100,118 @@ func (c *Course) ContextCode() string {
 func (c *Course) Settings(opts ...Option) (cs *CourseSettings, err error) {
 	cs = &CourseSettings{}
 	return cs, getjson(c.client, cs, optEnc(opts), "/courses/%d/settings", c.ID)
+}
+
+// Permissions get the current user's permissions with respect to
+// the course object.
+func (c *Course) Permissions() (*Permissions, error) {
+	p := &Permissions{}
+	return p, getjson(c.client, p, nil, "/courses/%d/permissions", c.ID)
+
+}
+
+// Permissions is a canvas user permissions object
+type Permissions struct {
+	Read                        bool `json:"read"`
+	ReadOutcomes                bool `json:"read_outcomes"`
+	ReadSyllabus                bool `json:"read_syllabus"`
+	ManageCanvasnetCourses      bool `json:"manage_canvasnet_courses"`
+	ProvisionCatalog            bool `json:"provision_catalog"`
+	CreateAccounts              bool `json:"create_accounts"`
+	ManageLinks                 bool `json:"manage_links"`
+	SuspendAccounts             bool `json:"suspend_accounts"`
+	ManageDemos                 bool `json:"manage_demos"`
+	BecomeUser                  bool `json:"become_user"`
+	ImportSis                   bool `json:"import_sis"`
+	ManageAccountMemberships    bool `json:"manage_account_memberships"`
+	ManageAccountSettings       bool `json:"manage_account_settings"`
+	ManageAlerts                bool `json:"manage_alerts"`
+	ManageCatalog               bool `json:"manage_catalog"`
+	ManageCourses               bool `json:"manage_courses"`
+	ManageDataServices          bool `json:"manage_data_services"`
+	ManageCourseVisibility      bool `json:"manage_course_visibility"`
+	ManageDeveloperKeys         bool `json:"manage_developer_keys"`
+	ModerateUserContent         bool `json:"moderate_user_content"`
+	ManageFeatureFlags          bool `json:"manage_feature_flags"`
+	ManageFrozenAssignments     bool `json:"manage_frozen_assignments"`
+	ManageGlobalOutcomes        bool `json:"manage_global_outcomes"`
+	ManageJobs                  bool `json:"manage_jobs"`
+	ManageMasterCourses         bool `json:"manage_master_courses"`
+	ManageRoleOverrides         bool `json:"manage_role_overrides"`
+	ManageStorageQuotas         bool `json:"manage_storage_quotas"`
+	ManageSis                   bool `json:"manage_sis"`
+	ManageSiteSettings          bool `json:"manage_site_settings"`
+	ManageUserLogins            bool `json:"manage_user_logins"`
+	ManageUserObservers         bool `json:"manage_user_observers"`
+	ReadCourseContent           bool `json:"read_course_content"`
+	ReadCourseList              bool `json:"read_course_list"`
+	ReadMessages                bool `json:"read_messages"`
+	ResetAnyMfa                 bool `json:"reset_any_mfa"`
+	UndeleteCourses             bool `json:"undelete_courses"`
+	ChangeCourseState           bool `json:"change_course_state"`
+	CreateCollaborations        bool `json:"create_collaborations"`
+	CreateConferences           bool `json:"create_conferences"`
+	CreateForum                 bool `json:"create_forum"`
+	GenerateObserverPairingCode bool `json:"generate_observer_pairing_code"`
+	ImportOutcomes              bool `json:"import_outcomes"`
+	LtiAddEdit                  bool `json:"lti_add_edit"`
+	ManageAdminUsers            bool `json:"manage_admin_users"`
+	ManageAssignments           bool `json:"manage_assignments"`
+	ManageCalendar              bool `json:"manage_calendar"`
+	ManageContent               bool `json:"manage_content"`
+	ManageFiles                 bool `json:"manage_files"`
+	ManageGrades                bool `json:"manage_grades"`
+	ManageGroups                bool `json:"manage_groups"`
+	ManageInteractionAlerts     bool `json:"manage_interaction_alerts"`
+	ManageOutcomes              bool `json:"manage_outcomes"`
+	ManageSections              bool `json:"manage_sections"`
+	ManageStudents              bool `json:"manage_students"`
+	ManageUserNotes             bool `json:"manage_user_notes"`
+	ManageRubrics               bool `json:"manage_rubrics"`
+	ManageWiki                  bool `json:"manage_wiki"`
+	ManageWikiCreate            bool `json:"manage_wiki_create"`
+	ManageWikiDelete            bool `json:"manage_wiki_delete"`
+	ManageWikiUpdate            bool `json:"manage_wiki_update"`
+	ModerateForum               bool `json:"moderate_forum"`
+	PostToForum                 bool `json:"post_to_forum"`
+	ReadAnnouncements           bool `json:"read_announcements"`
+	ReadEmailAddresses          bool `json:"read_email_addresses"`
+	ReadForum                   bool `json:"read_forum"`
+	ReadQuestionBanks           bool `json:"read_question_banks"`
+	ReadReports                 bool `json:"read_reports"`
+	ReadRoster                  bool `json:"read_roster"`
+	ReadSis                     bool `json:"read_sis"`
+	SelectFinalGrade            bool `json:"select_final_grade"`
+	SendMessages                bool `json:"send_messages"`
+	SendMessagesAll             bool `json:"send_messages_all"`
+
+	ViewAnalytics         bool `json:"view_analytics"`
+	ViewAuditTrail        bool `json:"view_audit_trail"`
+	ViewAllGrades         bool `json:"view_all_grades"`
+	ViewGroupPages        bool `json:"view_group_pages"`
+	ViewQuizAnswerAudits  bool `json:"view_quiz_answer_audits"`
+	ViewFeatureFlags      bool `json:"view_feature_flags"`
+	ViewUserLogins        bool `json:"view_user_logins"`
+	ViewLearningAnalytics bool `json:"view_learning_analytics"`
+	ViewUnpublishedItems  bool `json:"view_unpublished_items"`
+	ViewCourseChanges     bool `json:"view_course_changes"`
+	ViewErrorReports      bool `json:"view_error_reports"`
+	ViewGradeChanges      bool `json:"view_grade_changes"`
+	ViewJobs              bool `json:"view_jobs"`
+	ViewNotifications     bool `json:"view_notifications"`
+	ViewStatistics        bool `json:"view_statistics"`
+
+	ParticipateAsStudent bool `json:"participate_as_student"`
+	ReadGrades           bool `json:"read_grades"`
+	Update               bool `json:"update"`
+	Delete               bool `json:"delete"`
+	ReadAsAdmin          bool `json:"read_as_admin"`
+	Manage               bool `json:"manage"`
+	UseStudentView       bool `json:"use_student_view"`
+	ReadRubrics          bool `json:"read_rubrics"`
+	ResetContent         bool `json:"reset_content"`
+	ReadPriorRoster      bool `json:"read_prior_roster"`
+	CreateToolManually   bool `json:"create_tool_manually"`
 }
 
 // UpdateSettings will update a user's settings based on a given settings struct and
@@ -155,12 +267,16 @@ func (c *Course) User(id int, opts ...Option) (*User, error) {
 }
 
 // Assignment will get an assignment from the course given an id.
+//
+// https://canvas.instructure.com/doc/api/assignments.html#method.assignments_api.index
 func (c *Course) Assignment(id int, opts ...Option) (ass *Assignment, err error) {
 	ass = &Assignment{client: c.client, courseCode: c.CourseCode}
 	return ass, getjson(c.client, &ass, optEnc(opts), "/courses/%d/assignments/%d", c.ID, id)
 }
 
 // Assignments send the courses assignments over a channel concurrently.
+//
+// https://canvas.instructure.com/doc/api/assignments.html#method.assignments_api.index
 func (c *Course) Assignments(opts ...Option) <-chan *Assignment {
 	ch := make(assignmentChan)
 	pages := c.assignmentspager(ch, opts)
@@ -341,7 +457,7 @@ type Assignment struct {
 // a file to the assignment.
 //
 // https://canvas.instructure.com/doc/api/submissions.html#method.submissions.create
-func (a *Assignment) SubmitFile(filename string, r io.Reader, opts ...Option) error {
+func (a *Assignment) SubmitFile(filename string, r io.Reader, opts ...Option) (*File, error) {
 	if filename == "" {
 		if named, ok := r.(interface{ Name() string }); ok {
 			filename = named.Name()
@@ -359,19 +475,13 @@ func (a *Assignment) SubmitFile(filename string, r io.Reader, opts ...Option) er
 			params.Size = int(stat.Size())
 		}
 	}
-
 	endpoint := fmt.Sprintf("/courses/%d/assignments/%d/submissions/self/files", a.CourseID, a.ID)
-	f, err := uploadFile(a.client, r, endpoint, &params)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("%+v\n", f)
-	return nil
+	return uploadFile(a.client, r, endpoint, &params)
 }
 
 // SubmitOsFile is the same as SubmitFile except it takes advantage of
 // the extra file data stored in an *os.File.
-func (a *Assignment) SubmitOsFile(userid int, f *os.File) error {
+func (a *Assignment) SubmitOsFile(f *os.File) (*File, error) {
 	return a.SubmitFile(f.Name(), f)
 }
 

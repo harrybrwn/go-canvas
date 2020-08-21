@@ -12,5 +12,7 @@ gen/
 *.swp
 
 # Testing
-interfaces.go
 testdata/course.json
+
+# All of my compile time interface assertions
+interfaces.go
