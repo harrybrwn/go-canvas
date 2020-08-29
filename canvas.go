@@ -164,6 +164,11 @@ func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
 	return getAccounts(c.client, "/accounts", opts)
 }
 
+// SubAccounts will list the sub_accounts under an account
+func (c *Canvas) SubAccounts(accountId int, opts ...Option) ([]Account, error) {
+	return getAccounts(c.client, fmt.Sprintf("/accounts/%d/sub_accounts", accountId), opts)
+}
+
 // Accounts will list the accounts
 func Accounts(opts ...Option) ([]Account, error) {
 	return defaultCanvas.Accounts()
