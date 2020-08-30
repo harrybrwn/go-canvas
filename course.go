@@ -12,7 +12,7 @@ import (
 type Course struct {
 	ID                   int         `json:"id"`
 	Name                 string      `json:"name"`
-	SisCourseID          int         `json:"sis_course_id"`
+	SisCourseID          string      `json:"sis_course_id"`
 	UUID                 string      `json:"uuid"`
 	IntegrationID        interface{} `json:"integration_id"`
 	SisImportID          int         `json:"sis_import_id"`
