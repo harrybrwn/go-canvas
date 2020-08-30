@@ -164,6 +164,11 @@ func (c *Canvas) Accounts(opts ...Option) ([]Account, error) {
 	return getAccounts(c.client, "/accounts", opts)
 }
 
+// Account will list a single under an account
+func (c *Canvas) Account(accountId int, opts ...Option) (*Account, error) {
+	return getAccount(c.client, fmt.Sprintf("/accounts/%d", accountId), opts)
+}
+
 // SubAccounts will list the sub_accounts under an account
 func (c *Canvas) SubAccounts(accountId int, opts ...Option) ([]Account, error) {
 	return getAccounts(c.client, fmt.Sprintf("/accounts/%d/sub_accounts", accountId), opts)
@@ -457,6 +462,16 @@ func getAccounts(d doer, path string, opts []Option) (accts []Account, err error
 	}
 	for i := range accts {
 		accts[i].cli = d
+	}
+	return
+}
+
+
+func getAccount(d doer, path string, opts []Option) (acct *Account, err error) {
+	acct = &Account{cli: d}
+	err = getjson(d, &acct, asParams(opts), path)
+	if err != nil {
+		return acct, err
 	}
 	return
 }
